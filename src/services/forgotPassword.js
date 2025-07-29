@@ -12,16 +12,10 @@ const {
 } = require("../configs/index");
 
 const transporter = nodemailer.createTransport({
-  port: 465,
-  host: "smtp.gmail.com",
-  secure: true,
   service: EMAIL_SERVICE,
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
   },
 });
 
@@ -35,6 +29,7 @@ const sendEmail = async (to, subject, htmlContent) => {
 
   try {
     await transporter.sendMail(mailOptions);
+    console.log(`Email sent successfully to ${to}`);
     return true;
   } catch (err) {
     console.error(`Không gửi được email: ${err}`);
