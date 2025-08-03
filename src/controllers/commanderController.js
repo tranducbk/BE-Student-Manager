@@ -58,7 +58,15 @@ const getStudents = async (req, res) => {
   }
 
   try {
-    let students = await Student.find(query).skip(skip).limit(limit);
+    let students = await Student.find(query)
+      .populate([
+        { path: "university", select: "universityCode universityName" },
+        { path: "organization", select: "organizationName travelTime" },
+        { path: "educationLevel", select: "levelName" },
+        { path: "class", select: "className" },
+      ])
+      .skip(skip)
+      .limit(limit);
 
     if (students.length === 0) {
       return res.json([]);

@@ -13,6 +13,7 @@ const {
   getCommanderDutySchedules,
   getCommanderDutySchedule,
   getCommanderDutySchedulesCurrent,
+  getCommanderDutyScheduleByUserId,
   getGuards,
   createguard,
   updateGuard,
@@ -41,6 +42,11 @@ router.delete("/guard/:date", verifyToken, isAdmin, deleteGuard);
 //CRUD with commander_duty_schedule
 router.get("/commanderDutySchedules", verifyToken, getCommanderDutySchedules);
 router.get("/commanderDutySchedule", verifyToken, getCommanderDutySchedule);
+router.get(
+  "/commanderDutySchedule/:id",
+  verifyToken,
+  getCommanderDutyScheduleByUserId
+);
 router.put(
   "/commanderDutySchedule/:id",
   verifyToken,

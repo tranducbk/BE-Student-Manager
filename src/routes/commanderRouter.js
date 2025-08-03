@@ -203,6 +203,7 @@ router.delete(
 router.post("/achievement", verifyToken, isAdmin, createAchievement);
 
 //CRUD with student
+router.get("/student/:studentId", verifyToken, isAdmin, getStudent);
 router.put("/student/:studentId", verifyToken, isAdmin, updateStudent);
 router.get("/student", verifyToken, isAdmin, getStudents);
 router.get("/students", verifyToken, isAdmin, getAllStudent);

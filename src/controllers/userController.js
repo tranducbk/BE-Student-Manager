@@ -123,6 +123,19 @@ const getCommanderDutySchedulesCurrent = async (req, res) => {
   }
 };
 
+const getCommanderDutyScheduleByUserId = async (req, res) => {
+  try {
+    const schedule = await CommanderDutySchedule.findById(req.params.id);
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Không tìm thấy lịch trực" });
+    }
+
+    return res.status(200).json(schedule);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
 const updateCommanderDutySchedule = async (req, res) => {
   try {
     const updatedSchedule = await CommanderDutySchedule.findByIdAndUpdate(
@@ -269,6 +282,7 @@ const getGuardDetail = async (req, res) => {
 module.exports = {
   getUser,
   getCommanderDutySchedules,
+  getCommanderDutyScheduleByUserId,
   updateCommanderDutySchedule,
   createCommanderDutySchedule,
   deleteCommanderDutySchedule,
