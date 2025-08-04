@@ -87,11 +87,13 @@ const getStudents = async (req, res) => {
 
 const getAllStudent = async (req, res) => {
   try {
-    const student = await Student.find();
+    const students = await Student.find();
 
-    if (!student) return res.status(404).json("Không tìm thấy student");
+    if (!students || students.length === 0) {
+      return res.status(404).json("Không tìm thấy student");
+    }
 
-    return res.status(200).json(student.length);
+    return res.status(200).json(students);
   } catch (error) {
     return res.status(500).json(error);
   }
@@ -263,11 +265,12 @@ const createStudent = async (req, res) => {
       fullName,
       gender,
       birthday,
-      homet,
+      hometown,
+      currentAddress,
       email,
       phoneNumber,
       enrollment,
-      classUniversity,
+      class: classId,
       educationLevel,
       organization,
       university,
@@ -276,9 +279,8 @@ const createStudent = async (req, res) => {
       positionGovernment,
       positionParty,
       fullPartyMember,
-      probationary,
-      tyMember,
-      dateOfEnlistme,
+      probationaryPartyMember,
+      dateOfEnlistment,
       avatar,
     } = req.body;
 
@@ -289,11 +291,12 @@ const createStudent = async (req, res) => {
         fullName: fullName ? fullName : req.body.username,
         gender,
         birthday,
-        homet,
+        hometown,
+        currentAddress,
         email,
         phoneNumber,
         enrollment,
-        classUniversity,
+        class: classId,
         educationLevel,
         organization,
         university,
@@ -302,9 +305,8 @@ const createStudent = async (req, res) => {
         positionGovernment,
         positionParty,
         fullPartyMember,
-        probationary,
-        tyMember,
-        dateOfEnlistme,
+        probationaryPartyMember,
+        dateOfEnlistment,
         avatar,
       },
       { new: true }

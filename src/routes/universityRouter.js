@@ -6,6 +6,10 @@ const {
   getOrganizationsByUniversity,
   getEducationLevelsByOrganization,
   getClassesByEducationLevel,
+  getUniversityById,
+  getOrganizationById,
+  getEducationLevelById,
+  getClassById,
   createUniversity,
   updateUniversity,
   deleteUniversity,
@@ -22,10 +26,11 @@ const {
 
 // University routes
 router.get("/", verifyToken, getAllUniversities);
+router.get("/:universityId/hierarchy", verifyToken, getUniversityHierarchy);
+router.get("/:universityId", verifyToken, getUniversityById);
 router.post("/create", verifyToken, createUniversity);
 router.put("/:universityId", verifyToken, updateUniversity);
 router.delete("/:universityId", verifyToken, deleteUniversity);
-router.get("/:universityId/hierarchy", verifyToken, getUniversityHierarchy);
 
 // Organization routes
 router.get(
@@ -33,6 +38,7 @@ router.get(
   verifyToken,
   getOrganizationsByUniversity
 );
+router.get("/organizations/:organizationId", verifyToken, getOrganizationById);
 router.post("/:universityId/organizations", verifyToken, createOrganization);
 router.put("/organizations/:organizationId", verifyToken, updateOrganization);
 router.delete(
@@ -46,6 +52,11 @@ router.get(
   "/organizations/:organizationId/education-levels",
   verifyToken,
   getEducationLevelsByOrganization
+);
+router.get(
+  "/education-levels/:educationLevelId",
+  verifyToken,
+  getEducationLevelById
 );
 router.post(
   "/organizations/:organizationId/education-levels",
@@ -69,6 +80,7 @@ router.get(
   verifyToken,
   getClassesByEducationLevel
 );
+router.get("/classes/:classId", verifyToken, getClassById);
 router.post(
   "/education-levels/:educationLevelId/classes",
   verifyToken,

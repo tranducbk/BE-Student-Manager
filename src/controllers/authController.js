@@ -134,9 +134,7 @@ const changePassword = async (req, res) => {
 const Logout = async (req, res) => {
   try {
     res.clearCookie("accessToken");
-    accessTokenList = accessTokenList.filter(
-      (token) => token !== req.cookies.accessToken
-    );
+    res.clearCookie("refreshToken");
     return res.status(200).json("Đăng xuất thành công");
   } catch (error) {
     return res.status(500).json(error);

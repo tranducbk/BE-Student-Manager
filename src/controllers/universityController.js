@@ -99,6 +99,64 @@ const getAllUniversities = async (req, res) => {
   }
 };
 
+const getUniversityById = async (req, res) => {
+  try {
+    const { universityId } = req.params;
+    const university = await University.findById(universityId);
+    if (!university) {
+      return res.status(404).json({ message: "Không tìm thấy university" });
+    }
+    return res.status(200).json(university);
+  } catch (error) {
+    console.error("Error getting university by id:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getOrganizationById = async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const organization = await Organization.findById(organizationId);
+    if (!organization) {
+      return res.status(404).json({ message: "Không tìm thấy organization" });
+    }
+    return res.status(200).json(organization);
+  } catch (error) {
+    console.error("Error getting organization by id:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getEducationLevelById = async (req, res) => {
+  try {
+    const { educationLevelId } = req.params;
+    const educationLevel = await EducationLevel.findById(educationLevelId);
+    if (!educationLevel) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy education level" });
+    }
+    return res.status(200).json(educationLevel);
+  } catch (error) {
+    console.error("Error getting education level by id:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getClassById = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Không tìm thấy class" });
+    }
+    return res.status(200).json(classData);
+  } catch (error) {
+    console.error("Error getting class by id:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 const createUniversity = async (req, res) => {
   try {
     const { universityCode, universityName, status } = req.body;
@@ -395,6 +453,10 @@ module.exports = {
   getOrganizationsByUniversity,
   getEducationLevelsByOrganization,
   getClassesByEducationLevel,
+  getUniversityById,
+  getOrganizationById,
+  getEducationLevelById,
+  getClassById,
   createUniversity,
   updateUniversity,
   deleteUniversity,

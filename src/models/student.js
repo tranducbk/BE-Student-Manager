@@ -123,6 +123,7 @@ const studentSchema = mongoose.model(
     gender: String,
     birthday: Date,
     hometown: String,
+    currentAddress: String, // Nơi ở hiện nay
     email: String,
     phoneNumber: String,
     enrollment: Number,

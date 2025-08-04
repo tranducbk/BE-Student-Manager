@@ -38,15 +38,64 @@ const getStudent = async (req, res) => {
 
 const updateStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndUpdate(
+    const {
+      studentId: newStudentId,
+      fullName,
+      gender,
+      birthday,
+      hometown,
+      currentAddress,
+      email,
+      phoneNumber,
+      enrollment,
+      class: classId,
+      educationLevel,
+      organization,
+      university,
+      unit,
+      rank,
+      positionGovernment,
+      positionParty,
+      fullPartyMember,
+      probationaryPartyMember,
+      dateOfEnlistment,
+      avatar,
+    } = req.body;
+
+    const updatedStudent = await Student.findByIdAndUpdate(
       req.params.studentId,
-      req.body
+      {
+        studentId: newStudentId,
+        fullName,
+        gender,
+        birthday,
+        hometown,
+        currentAddress,
+        email,
+        phoneNumber,
+        enrollment,
+        class: classId,
+        educationLevel,
+        organization,
+        university,
+        unit,
+        rank,
+        positionGovernment,
+        positionParty,
+        fullPartyMember,
+        probationaryPartyMember,
+        dateOfEnlistment,
+        avatar,
+      },
+      { new: true }
     );
 
-    if (!student) return res.status(404).json("Không tìm thấy sinh viên");
+    if (!updatedStudent)
+      return res.status(404).json("Không tìm thấy sinh viên");
 
-    return res.status(200).json(student);
+    return res.status(200).json(updatedStudent);
   } catch (error) {
+    console.log("Cập nhật thất bại: ", error);
     return res.status(500).json("Lỗi server");
   }
 };
