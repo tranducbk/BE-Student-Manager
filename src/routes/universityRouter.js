@@ -8,6 +8,7 @@ const {
   getClassesByEducationLevel,
   createUniversity,
   updateUniversity,
+  deleteUniversity,
   createOrganization,
   createEducationLevel,
   createClass,
@@ -23,6 +24,7 @@ const {
 router.get("/", verifyToken, getAllUniversities);
 router.post("/create", verifyToken, createUniversity);
 router.put("/:universityId", verifyToken, updateUniversity);
+router.delete("/:universityId", verifyToken, deleteUniversity);
 router.get("/:universityId/hierarchy", verifyToken, getUniversityHierarchy);
 
 // Organization routes

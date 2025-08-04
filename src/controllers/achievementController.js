@@ -1,5 +1,6 @@
 const Achievement = require("../models/achievement");
 const User = require("../models/user");
+const Student = require("../models/student");
 
 // Lấy thông tin khen thưởng của student
 const getStudentAchievement = async (req, res) => {
@@ -34,6 +35,28 @@ const getStudentAchievement = async (req, res) => {
   }
 };
 
+// Lấy danh sách tất cả achievement cho admin
+const getAllAchievements = async (req, res) => {
+  try {
+    const achievements = await Achievement.find().populate("studentId");
+    return res.status(200).json(achievements);
+  } catch (error) {
+    console.error("Error getting all achievements:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Lấy danh sách học viên cho admin
+const getStudentsForAdmin = async (req, res) => {
+  try {
+    const students = await Student.find().select("_id fullName unit studentId");
+    return res.status(200).json(students);
+  } catch (error) {
+    console.error("Error getting students:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 // Thêm khen thưởng mới
 const addYearlyAchievement = async (req, res) => {
   try {
@@ -53,6 +76,59 @@ const addYearlyAchievement = async (req, res) => {
     if (!achievement) {
       achievement = new Achievement({
         studentId: user.student._id,
+        yearlyAchievements: [],
+      });
+    }
+
+    // Kiểm tra xem năm đã có khen thưởng chưa
+    const existingYear = achievement.yearlyAchievements.find(
+      (a) => a.year === year
+    );
+    if (existingYear) {
+      return res.status(400).json({ message: "Năm này đã có khen thưởng" });
+    }
+
+    // Thêm khen thưởng mới
+    const newAchievement = {
+      year,
+      decisionNumber,
+      decisionDate: new Date(decisionDate),
+      title,
+      scientific: {
+        initiatives: scientific?.initiatives || [],
+        topics: scientific?.topics || [],
+      },
+      notes,
+    };
+
+    achievement.yearlyAchievements.push(newAchievement);
+
+    // Tính toán lại thống kê
+    await calculateAchievementStats(achievement);
+
+    await achievement.save();
+
+    return res.status(201).json(achievement);
+  } catch (error) {
+    console.error("Error adding achievement:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Thêm khen thưởng cho admin (theo studentId)
+const addYearlyAchievementByAdmin = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { year, decisionNumber, decisionDate, title, scientific, notes } =
+      req.body;
+
+    let achievement = await Achievement.findOne({
+      studentId: studentId,
+    });
+
+    if (!achievement) {
+      achievement = new Achievement({
+        studentId: studentId,
         yearlyAchievements: [],
       });
     }
@@ -136,6 +212,45 @@ const updateYearlyAchievement = async (req, res) => {
   }
 };
 
+// Cập nhật khen thưởng cho admin
+const updateYearlyAchievementByAdmin = async (req, res) => {
+  try {
+    const { studentId, year } = req.params;
+    const updateData = req.body;
+
+    const achievement = await Achievement.findOne({
+      studentId: studentId,
+    });
+    if (!achievement) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin khen thưởng" });
+    }
+
+    const yearIndex = achievement.yearlyAchievements.findIndex(
+      (a) => a.year === parseInt(year)
+    );
+    if (yearIndex === -1) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy khen thưởng năm này" });
+    }
+
+    // Cập nhật dữ liệu
+    Object.assign(achievement.yearlyAchievements[yearIndex], updateData);
+
+    // Tính toán lại thống kê
+    await calculateAchievementStats(achievement);
+
+    await achievement.save();
+
+    return res.status(200).json(achievement);
+  } catch (error) {
+    console.error("Error updating achievement:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 // Xóa khen thưởng
 const deleteYearlyAchievement = async (req, res) => {
   try {
@@ -148,6 +263,36 @@ const deleteYearlyAchievement = async (req, res) => {
 
     const achievement = await Achievement.findOne({
       studentId: user.student._id,
+    });
+    if (!achievement) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin khen thưởng" });
+    }
+
+    achievement.yearlyAchievements = achievement.yearlyAchievements.filter(
+      (a) => a.year !== parseInt(year)
+    );
+
+    // Tính toán lại thống kê
+    await calculateAchievementStats(achievement);
+
+    await achievement.save();
+
+    return res.status(200).json({ message: "Xóa khen thưởng thành công" });
+  } catch (error) {
+    console.error("Error deleting achievement:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Xóa khen thưởng cho admin
+const deleteYearlyAchievementByAdmin = async (req, res) => {
+  try {
+    const { studentId, year } = req.params;
+
+    const achievement = await Achievement.findOne({
+      studentId: studentId,
     });
     if (!achievement) {
       return res
@@ -345,8 +490,13 @@ const calculateAchievementStats = async (achievement) => {
 
 module.exports = {
   getStudentAchievement,
+  getAllAchievements,
+  getStudentsForAdmin,
   addYearlyAchievement,
+  addYearlyAchievementByAdmin,
   updateYearlyAchievement,
+  updateYearlyAchievementByAdmin,
   deleteYearlyAchievement,
+  deleteYearlyAchievementByAdmin,
   getRecommendations,
 };

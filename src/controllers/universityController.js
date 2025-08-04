@@ -103,6 +103,8 @@ const createUniversity = async (req, res) => {
   try {
     const { universityCode, universityName, status } = req.body;
 
+    console.log("Creating university:", req.body);
+
     // Kiểm tra university code đã tồn tại chưa
     const existingUniversity = await University.findOne({ universityCode });
     if (existingUniversity) {
@@ -155,6 +157,47 @@ const updateUniversity = async (req, res) => {
     return res.status(200).json(updatedUniversity);
   } catch (error) {
     console.error("Error updating university:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const deleteUniversity = async (req, res) => {
+  try {
+    const { universityId } = req.params;
+
+    // Kiểm tra university có tồn tại không
+    const university = await University.findById(universityId);
+    if (!university) {
+      return res.status(404).json({ message: "Không tìm thấy trường đại học" });
+    }
+
+    // Xóa tất cả organizations thuộc về university này
+    await Organization.deleteMany({ universityId });
+
+    // Xóa tất cả education levels thuộc về các organizations của university này
+    const organizations = await Organization.find({ universityId });
+    for (const organization of organizations) {
+      await EducationLevel.deleteMany({ organizationId: organization._id });
+    }
+
+    // Xóa tất cả classes thuộc về các education levels của university này
+    for (const organization of organizations) {
+      const educationLevels = await EducationLevel.find({
+        organizationId: organization._id,
+      });
+      for (const educationLevel of educationLevels) {
+        await Class.deleteMany({ educationLevelId: educationLevel._id });
+      }
+    }
+
+    // Cuối cùng xóa university
+    await University.findByIdAndDelete(universityId);
+
+    return res
+      .status(200)
+      .json({ message: "Trường đại học đã được xóa thành công" });
+  } catch (error) {
+    console.error("Error deleting university:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -354,6 +397,7 @@ module.exports = {
   getClassesByEducationLevel,
   createUniversity,
   updateUniversity,
+  deleteUniversity,
   createOrganization,
   createEducationLevel,
   createClass,
