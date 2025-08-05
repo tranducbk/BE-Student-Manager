@@ -175,7 +175,10 @@ const studentSchema = mongoose.model(
       },
     ],
     helpCooking: [helpCookingSchema],
-    achievement: [achievementSchema],
+    achievement: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Achievement",
+    },
     tuitionFee: [tuitionFeeSchema],
     physicalResult: [physicalResultSchema],
     learningInformation: [learningInformationSchema],

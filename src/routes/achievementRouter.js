@@ -11,6 +11,7 @@ const {
   deleteYearlyAchievement,
   deleteYearlyAchievementByAdmin,
   getRecommendations,
+  getRecommendationsByStudentId,
 } = require("../controllers/achievementController");
 
 // Routes cho admin (phải đặt trước user routes để tránh conflict)
@@ -19,6 +20,14 @@ router.get("/admin/all", verifyToken, isAdmin, getAllAchievements);
 
 // Lấy danh sách học viên cho admin
 router.get("/admin/students", verifyToken, isAdmin, getStudentsForAdmin);
+
+// Lấy recommendations cho admin theo studentId
+router.get(
+  "/admin/:studentId/recommendations",
+  verifyToken,
+  isAdmin,
+  getRecommendationsByStudentId
+);
 
 // Thêm khen thưởng cho học viên (admin)
 router.post(
