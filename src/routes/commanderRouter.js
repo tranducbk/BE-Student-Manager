@@ -63,6 +63,8 @@ const {
   getListSuggestedRewardWord,
   updateStudentCutRice,
   generateAutoCutRiceForAllStudents,
+  getCutRiceDetail,
+  generateAutoCutRiceForStudent,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -223,6 +225,11 @@ router.post(
   isAdmin,
   generateAutoCutRiceForAllStudents
 );
+router.post(
+  "/cutRice/:studentId/auto-generate",
+  verifyToken,
+  generateAutoCutRiceForStudent
+);
 router.get("/tuitionFees", verifyToken, isAdmin, getTuitionFees);
 router.get("/learningResults", verifyToken, isAdmin, getLearningResults);
 router.get(
@@ -246,6 +253,7 @@ router.get(
 router.get("/learningResultAll", verifyToken, isAdmin, getLearningResultAll);
 router.get("/timeTables", verifyToken, isAdmin, getTimeTables);
 router.get("/:studentId/timeTable", verifyToken, isAdmin, getTimeTable);
+router.get("/cutRice/:cutRiceId", verifyToken, getCutRiceDetail);
 
 //CRUD with commander
 router.delete("/:commanderId", verifyToken, isAdmin, deleteCommander);
