@@ -52,6 +52,9 @@ const getMealType = (timeString) => {
 // Tạo lịch cắt cơm tự động
 const generateAutoCutRiceSchedule = async (studentId) => {
   try {
+    console.log(
+      `[DEBUG] Starting generateAutoCutRiceSchedule for student: ${studentId}`
+    );
     const student = await Student.findById(studentId).populate("university");
     if (!student) {
       throw new Error("Không tìm thấy sinh viên");
@@ -64,6 +67,10 @@ const generateAutoCutRiceSchedule = async (studentId) => {
       universityId: student.university,
     });
 
+    console.log(`[DEBUG] Student organization: ${student.organization}`);
+    console.log(`[DEBUG] Student university: ${student.university}`);
+    console.log(`[DEBUG] Found organization:`, organization);
+
     // Sử dụng travelTime từ organization, nếu không có thì dùng mặc định
     const travelTime = organization?.travelTime || 45; // Mặc định 45 phút
 
@@ -72,10 +79,14 @@ const generateAutoCutRiceSchedule = async (studentId) => {
     );
 
     // Lấy lịch học của sinh viên
-    const timeTables = await TimeTable.find({
-      studentId: student._id,
-      status: "active",
-    });
+    const studentWithTimeTable = await Student.findById(studentId).populate(
+      "timeTable"
+    );
+    const timeTables = studentWithTimeTable.timeTable || [];
+
+    console.log(
+      `[DEBUG] Found ${timeTables.length} time tables for student: ${student.fullName}`
+    );
 
     // Khởi tạo lịch cắt cơm cho tuần
     const cutRiceSchedule = {
@@ -88,28 +99,138 @@ const generateAutoCutRiceSchedule = async (studentId) => {
       sunday: { breakfast: false, lunch: false, dinner: false },
     };
 
-    // Xử lý từng môn học
+    // Xử lý từng môn học (logic chính xác)
+    // Nhóm lịch học theo ngày
+    const timeTableByDay = {};
     timeTables.forEach((timeTable) => {
       const day = timeTable.day;
-      const startTime = timeTable.startTime;
-      const endTime = timeTable.endTime;
+      if (!timeTableByDay[day]) {
+        timeTableByDay[day] = [];
+      }
+      timeTableByDay[day].push(timeTable);
+    });
 
-      // Kiểm tra từng bữa ăn
-      const meals = [
-        { type: "breakfast", time: MEAL_TIMES.BREAKFAST },
-        { type: "lunch", time: MEAL_TIMES.LUNCH },
-        { type: "dinner", time: MEAL_TIMES.DINNER },
-      ];
+    // Xử lý từng ngày
+    Object.entries(timeTableByDay).forEach(([day, dayTimeTables]) => {
+      console.log(
+        `[DEBUG] Processing day: ${day} with ${dayTimeTables.length} time tables`
+      );
 
-      meals.forEach((meal) => {
-        if (
-          shouldCutMealByClassTime(startTime, endTime, travelTime, meal.time)
-        ) {
-          cutRiceSchedule[day][meal.type] = true;
+      // Mapping ngày từ tiếng Việt sang tiếng Anh
+      const dayMapping = {
+        "Thứ 2": "monday",
+        "Thứ 3": "tuesday",
+        "Thứ 4": "wednesday",
+        "Thứ 5": "thursday",
+        "Thứ 6": "friday",
+        "Thứ 7": "saturday",
+        "Chủ nhật": "sunday",
+      };
+
+      const englishDay = dayMapping[day];
+      if (!englishDay) {
+        console.warn(`Không tìm thấy mapping cho ngày: ${day}`);
+        return;
+      }
+
+      // Tìm thời gian sớm nhất và muộn nhất trong ngày
+      let earliestStartTime = null;
+      let latestEndTime = null;
+
+      // Sắp xếp lịch học theo thời gian bắt đầu
+      dayTimeTables.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      // Tạo các khoảng thời gian liên tục
+      const timeRanges = [];
+      let currentRange = {
+        start: dayTimeTables[0].startTime,
+        end: dayTimeTables[0].endTime,
+      };
+
+      for (let i = 1; i < dayTimeTables.length; i++) {
+        const currentTimeTable = dayTimeTables[i];
+        const timeBetweenClasses = timeHelper.getTimeDifference(
+          currentRange.end,
+          currentTimeTable.startTime
+        );
+        const maxGap = travelTime * 2; // 2 lần thời gian đi lại
+
+        console.log(
+          `[DEBUG] Gap between classes: ${timeBetweenClasses} minutes, max gap: ${maxGap} minutes`
+        );
+
+        if (timeBetweenClasses > maxGap) {
+          // Tách khoảng thời gian
+          timeRanges.push(currentRange);
+          currentRange = {
+            start: currentTimeTable.startTime,
+            end: currentTimeTable.endTime,
+          };
+          console.log(
+            `[DEBUG] Split time range: ${currentRange.start} - ${currentRange.end}`
+          );
+        } else {
+          // Mở rộng khoảng thời gian hiện tại
+          currentRange.end = currentTimeTable.endTime;
+          console.log(
+            `[DEBUG] Extended time range: ${currentRange.start} - ${currentRange.end}`
+          );
         }
+      }
+
+      // Thêm khoảng cuối cùng
+      timeRanges.push(currentRange);
+
+      console.log(
+        `[DEBUG] Day ${day} has ${timeRanges.length} time ranges:`,
+        timeRanges
+      );
+
+      // Xử lý từng khoảng thời gian
+      timeRanges.forEach((range, index) => {
+        console.log(
+          `[DEBUG] Processing range ${index + 1}: ${range.start} - ${range.end}`
+        );
+
+        // Tính khoảng thời gian đi lại cho khoảng này
+        const departureTime = calculateDepartureTime(range.start, travelTime);
+        const returnTime = calculateReturnTime(range.end, travelTime);
+
+        console.log(
+          `[DEBUG] Range ${
+            index + 1
+          } travel range: ${departureTime} - ${returnTime}`
+        );
+
+        // Kiểm tra từng bữa ăn
+        const meals = [
+          { type: "breakfast", time: MEAL_TIMES.BREAKFAST },
+          { type: "lunch", time: MEAL_TIMES.LUNCH },
+          { type: "dinner", time: MEAL_TIMES.DINNER },
+        ];
+
+        meals.forEach((meal) => {
+          if (
+            shouldCutMeal(
+              departureTime,
+              returnTime,
+              meal.time,
+              range.start,
+              range.end
+            )
+          ) {
+            console.log(
+              `[DEBUG] Setting ${meal.type} to true for ${englishDay} (range ${
+                index + 1
+              })`
+            );
+            cutRiceSchedule[englishDay][meal.type] = true;
+          }
+        });
       });
     });
 
+    console.log(`[DEBUG] Final cut rice schedule:`, cutRiceSchedule);
     return cutRiceSchedule;
   } catch (error) {
     console.error("Error generating auto cut rice schedule:", error);
@@ -120,7 +241,9 @@ const generateAutoCutRiceSchedule = async (studentId) => {
 // Cập nhật lịch cắt cơm tự động cho sinh viên
 const updateAutoCutRice = async (studentId) => {
   try {
+    console.log(`[DEBUG] Starting updateAutoCutRice for student: ${studentId}`);
     const cutRiceSchedule = await generateAutoCutRiceSchedule(studentId);
+    console.log(`[DEBUG] Generated cut rice schedule:`, cutRiceSchedule);
 
     // Cập nhật vào database
     const student = await Student.findById(studentId);
@@ -128,16 +251,27 @@ const updateAutoCutRice = async (studentId) => {
       throw new Error("Không tìm thấy sinh viên");
     }
 
+    console.log(
+      `[DEBUG] Found student: ${student.fullName}, current cutRice count: ${student.cutRice.length}`
+    );
+
     // Tìm và cập nhật hoặc tạo mới lịch cắt cơm
+    // Tìm lịch cắt cơm tự động (isAutoGenerated === true hoặc không có isAutoGenerated)
     const existingCutRice = student.cutRice.find(
-      (schedule) => schedule.isAutoGenerated === true
+      (schedule) =>
+        schedule.isAutoGenerated === true ||
+        schedule.isAutoGenerated === undefined
     );
 
     if (existingCutRice) {
+      console.log(`[DEBUG] Updating existing auto-generated cut rice schedule`);
       // Cập nhật lịch hiện có
       Object.assign(existingCutRice, cutRiceSchedule);
+      existingCutRice.isAutoGenerated = true;
       existingCutRice.lastUpdated = new Date();
+      existingCutRice.notes = "Tự động tạo dựa trên lịch học";
     } else {
+      console.log(`[DEBUG] Creating new auto-generated cut rice schedule`);
       // Tạo lịch mới
       const newCutRiceSchedule = {
         ...cutRiceSchedule,
@@ -149,6 +283,20 @@ const updateAutoCutRice = async (studentId) => {
     }
 
     await student.save();
+    console.log(
+      `[DEBUG] Successfully saved cut rice schedule for student: ${student.fullName}`
+    );
+
+    // Log để kiểm tra dữ liệu đã lưu
+    const savedStudent = await Student.findById(studentId);
+    console.log(
+      `[DEBUG] After save - cutRice count: ${savedStudent.cutRice.length}`
+    );
+    console.log(
+      `[DEBUG] Latest cut rice schedule:`,
+      savedStudent.cutRice[savedStudent.cutRice.length - 1]
+    );
+
     return cutRiceSchedule;
   } catch (error) {
     console.error("Error updating auto cut rice:", error);

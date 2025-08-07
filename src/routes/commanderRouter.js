@@ -61,6 +61,8 @@ const {
   getPdfPhysicalResutl,
   getPdfTuitionFee,
   getListSuggestedRewardWord,
+  updateStudentCutRice,
+  generateAutoCutRiceForAllStudents,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -214,6 +216,13 @@ router.post("/student", verifyToken, isAdmin, createStudent);
 //Others
 router.get("/cutRice", verifyToken, isAdmin, getAllCutRice);
 router.get("/cutRiceByDate", verifyToken, isAdmin, getAllCutRiceByDate);
+router.put("/cutRice/:studentId", verifyToken, isAdmin, updateStudentCutRice);
+router.post(
+  "/cutRice/auto-generate",
+  verifyToken,
+  isAdmin,
+  generateAutoCutRiceForAllStudents
+);
 router.get("/tuitionFees", verifyToken, isAdmin, getTuitionFees);
 router.get("/learningResults", verifyToken, isAdmin, getLearningResults);
 router.get(

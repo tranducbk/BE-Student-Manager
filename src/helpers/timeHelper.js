@@ -114,14 +114,73 @@ const calculateReturnTime = (endTime, travelMinutes) => {
   return addMinutesToTime(endTime, travelMinutes);
 };
 
+// Tìm giờ ăn gần nhất (trước hoặc sau) thời gian cho trước
+const findNearestMeal = (time) => {
+  const timeMinutes = timeToMinutes(time);
+  const mealTimes = [
+    { name: "breakfast", time: "06:00", minutes: 360 },
+    { name: "lunch", time: "11:00", minutes: 660 },
+    { name: "dinner", time: "17:30", minutes: 1050 },
+  ];
+
+  // Tìm giờ ăn gần nhất (trước hoặc sau)
+  let nearestMeal = null;
+  let minDistance = Infinity;
+
+  for (const meal of mealTimes) {
+    const distance = Math.abs(meal.minutes - timeMinutes);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearestMeal = meal;
+    } else if (distance === minDistance) {
+      // Nếu khoảng cách bằng nhau, ưu tiên giờ ăn trước
+      if (meal.minutes < timeMinutes) {
+        nearestMeal = meal;
+      }
+    }
+  }
+
+  return nearestMeal;
+};
+
 // Kiểm tra xem có cần cắt cơm không dựa trên thời gian đi và về
-const shouldCutMeal = (departureTime, returnTime, mealTime) => {
+const shouldCutMeal = (
+  departureTime,
+  returnTime,
+  mealTime,
+  startTime = null,
+  endTime = null
+) => {
   const departureMinutes = timeToMinutes(departureTime);
   const returnMinutes = timeToMinutes(returnTime);
   const mealMinutes = timeToMinutes(mealTime);
 
-  // Cắt cơm nếu thời gian đi trước bữa ăn và về sau bữa ăn
-  return departureMinutes <= mealMinutes && returnMinutes >= mealMinutes;
+  console.log(
+    `[DEBUG] shouldCutMeal: departureTime=${departureTime} (${departureMinutes}min), returnTime=${returnTime} (${returnMinutes}min), mealTime=${mealTime} (${mealMinutes}min)`
+  );
+
+  // Logic cơ bản: đi trước hoặc đúng giờ ăn và về sau hoặc đúng giờ ăn
+  let result = departureMinutes <= mealMinutes && returnMinutes >= mealMinutes;
+
+  // Logic đặc biệt cho bữa trưa (11:00)
+  if (mealTime === "11:00" && startTime && endTime) {
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = timeToMinutes(endTime);
+    const lunchMinutes = timeToMinutes("11:00");
+
+    // Nếu đang học đúng vào giờ trưa thì cũng cắt
+    const isStudyingDuringLunch =
+      startMinutes <= lunchMinutes && endMinutes >= lunchMinutes;
+    result = result || isStudyingDuringLunch;
+
+    console.log(
+      `[DEBUG] Lunch special logic: startTime=${startTime} (${startMinutes}min), endTime=${endTime} (${endMinutes}min), isStudyingDuringLunch=${isStudyingDuringLunch}`
+    );
+  }
+
+  console.log(`[DEBUG] shouldCutMeal result: ${result}`);
+
+  return result;
 };
 
 // Lấy thông tin thời gian chi tiết

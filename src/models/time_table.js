@@ -6,15 +6,7 @@ const timeTableSchema = mongoose.model(
     day: {
       type: String,
       required: true,
-      enum: [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-      ],
+      enum: ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"],
     },
     schoolWeek: String,
     // Thời gian bắt đầu môn học (HH:mm format)
@@ -24,6 +16,11 @@ const timeTableSchema = mongoose.model(
     },
     // Thời gian kết thúc môn học (HH:mm format)
     endTime: {
+      type: String,
+      required: true,
+    },
+    // Chuỗi thời gian tổng hợp (startTime - endTime)
+    time: {
       type: String,
       required: true,
     },

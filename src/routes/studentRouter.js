@@ -21,6 +21,7 @@ const {
   updateAutoCutRice,
   resetAutoCutRice,
   updateManualCutRice,
+  debugCutRice, // Thêm import
 } = require("../controllers/studentController");
 
 // Import từ các controller đã tách
@@ -98,6 +99,9 @@ router.post("/:userId/auto-cut-rice", verifyToken, createAutoCutRice);
 router.put("/:userId/auto-cut-rice", verifyToken, updateAutoCutRice);
 router.put("/:userId/reset-cut-rice", verifyToken, resetAutoCutRice);
 router.put("/:userId/manual-cut-rice", verifyToken, updateManualCutRice);
+
+// Debug route để kiểm tra lịch cắt cơm
+router.get("/:userId/debug-cut-rice", verifyToken, debugCutRice);
 
 // University hierarchy
 router.get(

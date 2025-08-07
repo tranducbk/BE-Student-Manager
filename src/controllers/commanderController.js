@@ -1086,6 +1086,7 @@ const getTimeTables = async (req, res) => {
           day: timeTable.day,
           schoolWeek: timeTable.schoolWeek,
           time: timeTable.time,
+          subject: timeTable.subject,
           classroom: timeTable.classroom,
         };
         if (!fullName && !unit) {
@@ -1233,6 +1234,7 @@ const getTimeTable = async (req, res) => {
         day: timeTable.day,
         schoolWeek: timeTable.schoolWeek,
         time: timeTable.time,
+        subject: timeTable.subject,
         classroom: timeTable.classroom,
       };
 
@@ -2783,367 +2785,132 @@ const getPdfPhysicalResutl = async (req, res) => {
 const getListSuggestedRewardWord = async (req, res) => {
   try {
     const students = await Student.find();
-    let allSemesters = [];
+
+    const suggestedRewards = [];
+
     students.forEach((student) => {
-      student.learningInformation.forEach((info) => {
-        allSemesters.push(info.semester);
-      });
-    });
-    const maxSemester = allSemesters.reduce((max, current) => {
-      return max > current ? max : current;
-    }, "");
-    if (!maxSemester) {
-      return res.status(404).json({ message: "Không tìm thấy học kỳ nào." });
-    }
-
-    let suggestedRewards = [];
-    students.forEach((student) => {
-      let meetsCriteria = false;
-      let currentGPA = 0;
-
-      student.learningInformation.forEach((learningInformation) => {
-        if (
-          learningInformation.semester === maxSemester &&
-          learningInformation.GPA >= 2.995
-        ) {
-          meetsCriteria = true;
-          currentGPA = learningInformation.GPA;
-        }
-      });
-
-      student.physicalResult.forEach((physicalResult) => {
-        if (physicalResult.semester === maxSemester) {
-          const { practise } = physicalResult;
-          if (practise === "Tốt" || practise === "Xuất sắc") {
-            if (meetsCriteria) {
-              suggestedRewards.push({
-                fullName: student.fullName,
-                unit: student.unit,
-                university: student.university,
-                GPA: currentGPA,
-                practise: practise,
-              });
-            }
-          }
+      student.achievement.forEach((achievement) => {
+        if (achievement.status === "suggested") {
+          suggestedRewards.push({
+            _id: achievement._id,
+            fullName: student.fullName,
+            unit: student.unit,
+            title: achievement.title,
+            description: achievement.description,
+            points: achievement.points,
+            status: achievement.status,
+          });
         }
       });
     });
 
-    const parts = maxSemester.split(".");
-    const year = parseInt(parts[0], 10);
-    const semester = parts[1];
-
-    const tableRows = [
-      new TableRow({
-        height: { value: 500, rule: HeightRule.EXACT }, // thiết lập chiều cao cho hàng tiêu đề
-        children: [
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER, // căn giữa theo chiều dọc
-            children: [
-              new Paragraph({
-                text: "Họ và tên",
-                bold: true,
-                alignment: AlignmentType.CENTER, // căn giữa theo chiều ngang
-                size: 24,
-              }),
-            ],
-          }),
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                text: "Đơn vị",
-                bold: true,
-                alignment: AlignmentType.CENTER,
-                size: 24,
-              }),
-            ],
-          }),
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                text: "Trường đại học",
-                bold: true,
-                alignment: AlignmentType.CENTER,
-                size: 24,
-              }),
-            ],
-          }),
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                text: "Điểm TB",
-                bold: true,
-                alignment: AlignmentType.CENTER,
-                size: 24,
-              }),
-            ],
-          }),
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                text: "KQ rèn luyện",
-                bold: true,
-                alignment: AlignmentType.CENTER,
-                size: 24,
-              }),
-            ],
-          }),
-          new TableCell({
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                text: "Ghi chú",
-                bold: true,
-                alignment: AlignmentType.CENTER,
-                size: 24,
-              }),
-            ],
-          }),
-        ],
-      }),
-    ];
-
-    suggestedRewards.forEach((reward) => {
-      tableRows.push(
-        new TableRow({
-          height: { value: 500, rule: HeightRule.EXACT }, // thiết lập chiều cao cho các hàng khác
-          children: [
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: reward.fullName,
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: reward.unit,
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: reward.university.replace("Đại học ", "").trim(),
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: reward.GPA.toString(),
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: reward.practise,
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-            new TableCell({
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  text: "",
-                  alignment: AlignmentType.CENTER,
-                  size: 24,
-                }),
-              ],
-            }),
-          ],
-        })
-      );
-    });
-
-    const doc = new Document({
-      sections: [
-        {
-          properties: {
-            page: {
-              margin: {
-                top: 1417,
-                right: 1134,
-                bottom: 1417,
-                left: 1984,
-              },
-            },
-          },
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "HỌC VIỆN KTQS",
-                  size: 26,
-                }),
-                new TextRun({
-                  text: "\tCỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
-                  bold: true,
-                  size: 26,
-                }),
-              ],
-              tabStops: [
-                {
-                  type: AlignmentType.RIGHT,
-                  position: TabStopPosition.MAX,
-                },
-              ],
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "HỆ HỌC VIÊN 5",
-                  bold: true,
-                  size: 26,
-                }),
-                new TextRun({
-                  text: "\tĐộc lập - Tự do - Hạnh phúc",
-                  bold: true,
-                  size: 26,
-                }),
-              ],
-              tabStops: [
-                {
-                  type: AlignmentType.RIGHT,
-                  position: 7550,
-                },
-              ],
-            }),
-            new Paragraph({}),
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              indent: { right: 500 },
-              children: [
-                new TextRun({
-                  text: "Hà Nội, ngày ... tháng ... năm 20...",
-                  italics: true,
-                  size: 26,
-                }),
-              ],
-            }),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({
-                  text: "DANH SÁCH",
-                  bold: true,
-                  size: 32,
-                }),
-              ],
-            }),
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({
-                  text: `Gợi ý khen thưởng học kỳ ${semester} năm học ${year} - ${
-                    year + 1
-                  }`,
-                  bold: true,
-                  size: 32,
-                }),
-              ],
-            }),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({
-              alignment: AlignmentType.LEFT,
-              children: [
-                new TextRun({
-                  text: "*Hệ học viên 5",
-                  italics: true,
-                  size: 26,
-                }),
-              ],
-            }),
-            new Paragraph({
-              alignment: AlignmentType.LEFT,
-              children: [
-                new TextRun({
-                  text: `1. Danh sách gợi ý khen thưởng`,
-                  bold: true,
-                  size: 26,
-                }),
-              ],
-              spacing: { after: 100 },
-            }),
-            new Table({
-              width: {
-                size: 100,
-                type: WidthType.PERCENTAGE,
-              },
-              rows: tableRows,
-              spacing: { after: 100 },
-            }),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              indent: { right: 800 },
-              children: [
-                new TextRun({
-                  text: "HỆ TRƯỞNG",
-                  size: 26,
-                }),
-              ],
-            }),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({}),
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              indent: { right: 595 },
-              children: [
-                new TextRun({
-                  text: "Nguyễn Văn Minh",
-                  size: 26,
-                }),
-              ],
-            }),
-          ],
-        },
-      ],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=Danh_sach_goi_y_khen_thuong_hoc_ky_${maxSemester}.docx`
-    );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
-    res.send(buffer);
+    return res.status(200).json(suggestedRewards);
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Error generating document");
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
+
+// Admin chỉnh sửa lịch cắt cơm của student
+const updateStudentCutRice = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const cutRiceData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy sinh viên" });
+    }
+
+    // Tìm lịch cắt cơm hiện tại (không phải auto-generated)
+    const currentCutRice = student.cutRice.find(
+      (schedule) => schedule.isAutoGenerated !== true
+    );
+
+    if (currentCutRice) {
+      // Cập nhật lịch hiện có
+      Object.assign(currentCutRice, cutRiceData);
+      currentCutRice.lastUpdated = new Date();
+      currentCutRice.notes = "Được chỉnh sửa bởi admin";
+    } else {
+      // Tạo lịch mới
+      const newCutRice = {
+        ...cutRiceData,
+        isAutoGenerated: false,
+        lastUpdated: new Date(),
+        notes: "Được tạo bởi admin",
+      };
+      student.cutRice.push(newCutRice);
+    }
+
+    await student.save();
+
+    // Trả về lịch đã cập nhật
+    const updatedCutRice = student.cutRice.find(
+      (schedule) => schedule.isAutoGenerated !== true
+    );
+
+    return res.status(200).json({
+      message: "Cập nhật lịch cắt cơm thành công",
+      cutRice: updatedCutRice,
+    });
+  } catch (error) {
+    console.error("Error updating student cut rice:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Tạo lịch cắt cơm tự động cho tất cả students
+const generateAutoCutRiceForAllStudents = async (req, res) => {
+  try {
+    const students = await Student.find();
+    const autoCutRiceService = require("../services/autoCutRiceService");
+
+    let successCount = 0;
+    let errorCount = 0;
+    const results = [];
+
+    for (const student of students) {
+      try {
+        const cutRiceSchedule = await autoCutRiceService.updateAutoCutRice(
+          student._id
+        );
+        successCount++;
+        results.push({
+          studentId: student._id,
+          fullName: student.fullName,
+          unit: student.unit,
+          status: "success",
+          schedule: cutRiceSchedule,
+        });
+      } catch (error) {
+        errorCount++;
+        results.push({
+          studentId: student._id,
+          fullName: student.fullName,
+          unit: student.unit,
+          status: "error",
+          error: error.message,
+        });
+        console.error(
+          `Error generating auto cut rice for student ${student.fullName}:`,
+          error
+        );
+      }
+    }
+
+    return res.status(200).json({
+      message: `Tạo lịch cắt cơm tự động hoàn tất. Thành công: ${successCount}, Lỗi: ${errorCount}`,
+      totalStudents: students.length,
+      successCount,
+      errorCount,
+      results,
+    });
+  } catch (error) {
+    console.error("Error generating auto cut rice for all students:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 module.exports = {
   updateCommander,
   getCommander,
@@ -3203,4 +2970,6 @@ module.exports = {
   getPdfPhysicalResutl,
   getPdfTuitionFee,
   getListSuggestedRewardWord,
+  updateStudentCutRice,
+  generateAutoCutRiceForAllStudents,
 };
