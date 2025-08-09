@@ -1,4 +1,7 @@
 const Semester = require("../models/semester");
+const RegulatoryDocument = require("../models/regulatory_document");
+const Student = require("../models/student");
+const StudentNotifications = require("../models/student_notifications");
 
 // GET /semester
 const getAllSemesters = async (req, res) => {
@@ -43,10 +46,40 @@ const createSemester = async (req, res) => {
         .json({ message: "Thiếu dữ liệu bắt buộc (code, schoolYear)" });
     }
     const exists = await Semester.findOne({ code });
-    if (exists) return res.status(409).json({ message: "Mã kỳ đã tồn tại" });
+    if (exists)
+      return res.status(409).json({
+        message: `Học kỳ ${exists.code} - ${exists.schoolYear} đã tồn tại. Vui lòng kiểm tra lại.`,
+      });
 
     const semester = await Semester.create({ code, schoolYear });
-    return res.status(201).json(semester);
+
+    // Broadcast thông báo tới học viên dựa trên cơ chế RegulatoryDocument
+    try {
+      const term = String(code).split(".")[1] || "";
+      const termLabel = term ? `HK${term}` : code; // đồng bộ định dạng HK1/HK2/HK3
+      const doc = await RegulatoryDocument.create({
+        title: `Thông báo học kỳ mới ${termLabel} - ${schoolYear}`,
+        content: `Học kỳ ${termLabel} - ${schoolYear} đã được tạo. Vui lòng kiểm tra thông tin học tập và đăng ký theo quy định.`,
+        dateIssued: new Date(),
+        author: req.user?.id || "system",
+      });
+
+      const students = await Student.find({}, { _id: 1 });
+      if (students && students.length > 0) {
+        const notiDocs = students.map((s) => ({
+          studentId: s._id,
+          notificationId: doc._id,
+        }));
+        await StudentNotifications.insertMany(notiDocs);
+      }
+    } catch (notifyErr) {
+      console.error("Semester notify error:", notifyErr?.message || notifyErr);
+    }
+
+    return res.status(201).json({
+      ...semester.toObject(),
+      message: `Đã tạo học kỳ ${semester.code} - ${semester.schoolYear}`,
+    });
   } catch (error) {
     return res
       .status(500)
@@ -67,7 +100,10 @@ const updateSemester = async (req, res) => {
     if (code) {
       // ensure unique code
       const exists = await Semester.findOne({ code, _id: { $ne: id } });
-      if (exists) return res.status(409).json({ message: "Mã kỳ đã tồn tại" });
+      if (exists)
+        return res.status(409).json({
+          message: `Học kỳ ${exists.code} - ${exists.schoolYear} đã tồn tại. Vui lòng kiểm tra lại.`,
+        });
     }
 
     const semester = await Semester.findByIdAndUpdate(id, update, {
@@ -75,7 +111,10 @@ const updateSemester = async (req, res) => {
     });
     if (!semester)
       return res.status(404).json({ message: "Không tìm thấy kỳ" });
-    return res.status(200).json(semester);
+    return res.status(200).json({
+      ...semester.toObject(),
+      message: `Đã cập nhật học kỳ ${semester.code} - ${semester.schoolYear}`,
+    });
   } catch (error) {
     return res
       .status(500)
@@ -90,7 +129,9 @@ const deleteSemester = async (req, res) => {
     const semester = await Semester.findByIdAndDelete(id);
     if (!semester)
       return res.status(404).json({ message: "Không tìm thấy kỳ" });
-    return res.status(200).json({ message: "Đã xóa kỳ" });
+    return res.status(200).json({
+      message: `Đã xóa học kỳ ${semester.code} - ${semester.schoolYear}`,
+    });
   } catch (error) {
     return res
       .status(500)

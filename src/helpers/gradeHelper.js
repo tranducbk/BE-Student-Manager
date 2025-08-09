@@ -75,29 +75,35 @@ const grade4ToLetter = (grade4) => {
   return "F";
 };
 
-// Chuyển đổi điểm hệ 10 sang điểm chữ
+// Chuyển đổi điểm hệ 10 sang điểm chữ (theo bảng ngưỡng: 0-3.9 F, 4.0-4.9 D, 5.0-5.4 D+,
+// 5.5-6.4 C, 6.5-6.9 C+, 7.0-7.9 B, 8.0-8.4 B+, 8.5-9.4 A, 9.5-10 A+)
 const grade10ToLetter = (grade10) => {
-  if (grade10 >= 9.0) return "A+";
-  if (grade10 >= 8.5) return "A";
-  if (grade10 >= 8.0) return "B+";
-  if (grade10 >= 7.5) return "B";
-  if (grade10 >= 7.0) return "C+";
-  if (grade10 >= 6.5) return "C";
-  if (grade10 >= 6.0) return "D+";
-  if (grade10 >= 5.0) return "D";
+  const g = parseFloat(grade10);
+  if (isNaN(g)) return "F";
+  if (g >= 9.5) return "A+";
+  if (g >= 8.5) return "A";
+  if (g >= 8.0) return "B+";
+  if (g >= 7.0) return "B";
+  if (g >= 6.5) return "C+";
+  if (g >= 5.5) return "C";
+  if (g >= 5.0) return "D+";
+  if (g >= 4.0) return "D";
   return "F";
 };
 
-// Chuyển đổi điểm hệ 4 sang điểm hệ 10
+// Chuyển đổi điểm hệ 4 sang điểm hệ 10 (tuyến tính theo dải – theo bảng quy đổi)
 const grade4ToGrade10 = (grade4) => {
-  if (grade4 >= 4.0) return 10.0;
-  if (grade4 >= 3.5) return 8.5;
-  if (grade4 >= 3.0) return 8.0;
-  if (grade4 >= 2.5) return 7.5;
-  if (grade4 >= 2.0) return 7.0;
-  if (grade4 >= 1.5) return 6.5;
-  if (grade4 >= 1.0) return 6.0;
-  return 0.0;
+  const g = parseFloat(grade4);
+  if (isNaN(g)) return 0.0;
+  if (g < 2.0) return 0.0; // rớt
+  // 2.0 đến cận 2.5: a=3.00; b=-0.5 => 10 = 4*a + b
+  if (g < 2.5) return Math.min(10.0, 3.0 * g - 0.5);
+  // 2.5 đến cận 3.2: a=1.42; b=3.45
+  if (g < 3.2) return Math.min(10.0, 1.42 * g + 3.45);
+  // 3.2 đến cận 3.6: a=2.50; b=0.00
+  if (g < 3.6) return Math.min(10.0, 2.5 * g + 0.0);
+  // 3.6 đến tròn 4.0: a=2.50; b=0.00
+  return Math.min(10.0, 2.5 * g + 0.0);
 };
 
 // Chuyển đổi điểm hệ 10 sang điểm hệ 4
@@ -127,19 +133,9 @@ const calculateAverageGrade4 = (subjects) => {
   return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
 };
 
-// Tính điểm trung bình hệ 10 cho một danh sách môn học
-const calculateAverageGrade10 = (subjects) => {
-  if (!subjects || subjects.length === 0) return 0.0;
-
-  let totalGradePoints = 0;
-  let totalCredits = 0;
-
-  subjects.forEach((subject) => {
-    totalGradePoints += subject.gradePoint10 * subject.credits;
-    totalCredits += subject.credits;
-  });
-
-  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+// Tính điểm trung bình hệ 10 cho học kỳ dựa trên GPA hệ 4 và công thức tuyến tính
+const calculateSemesterAverage10FromGpa4 = (averageGrade4) => {
+  return grade4ToGrade10(averageGrade4);
 };
 
 // Tính tổng số tín chỉ
@@ -224,7 +220,9 @@ const updateSemesterResult = (semesterResult) => {
 
   semesterResult.totalCredits = calculateTotalCredits(subjects);
   semesterResult.averageGrade4 = calculateAverageGrade4(subjects);
-  semesterResult.averageGrade10 = calculateAverageGrade10(subjects);
+  semesterResult.averageGrade10 = calculateSemesterAverage10FromGpa4(
+    semesterResult.averageGrade4
+  );
   semesterResult.updatedAt = new Date();
 
   return semesterResult;
@@ -310,7 +308,7 @@ module.exports = {
   grade4ToGrade10,
   grade10ToGrade4,
   calculateAverageGrade4,
-  calculateAverageGrade10,
+  calculateSemesterAverage10FromGpa4,
   calculateTotalCredits,
   calculateCumulativeGrade4,
   calculateCumulativeGrade10,

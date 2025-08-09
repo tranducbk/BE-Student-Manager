@@ -109,8 +109,15 @@ const getTuitionFee = async (req, res) => {
     }
 
     const student = user.student;
-
-    return res.status(200).json(student.tuitionFee);
+    const { semester } = req.query;
+    const list = student.tuitionFee || [];
+    if (semester) {
+      const filtered = list.filter(
+        (t) => String(t.semester) === String(semester)
+      );
+      return res.status(200).json(filtered);
+    }
+    return res.status(200).json(list);
   } catch (error) {
     return res.status(500).json({ message: "Lỗi server" });
   }
