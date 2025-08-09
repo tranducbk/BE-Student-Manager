@@ -309,23 +309,22 @@ const createEducationLevel = async (req, res) => {
 
 const createClass = async (req, res) => {
   try {
-    const { className } = req.body;
     const { educationLevelId } = req.params;
+    const { className } = req.body;
 
-    const educationLevel = await EducationLevel.findById(educationLevelId);
-    if (!educationLevel) {
-      return res
-        .status(404)
-        .json({ message: "Không tìm thấy education level" });
+    if (!className) {
+      return res.status(400).json({ message: "Tên lớp là bắt buộc" });
     }
 
-    const classItem = new Class({
+    const newClass = new Class({
       className,
       educationLevelId,
+      studentCount: 0, // Khởi tạo với 0 sinh viên
     });
 
-    await classItem.save();
-    return res.status(201).json(classItem);
+    await newClass.save();
+
+    return res.status(201).json(newClass);
   } catch (error) {
     console.error("Error creating class:", error);
     return res.status(500).json({ message: "Lỗi server" });
@@ -435,14 +434,125 @@ const deleteEducationLevel = async (req, res) => {
 const deleteClass = async (req, res) => {
   try {
     const { classId } = req.params;
-    const classItem = await Class.findByIdAndDelete(classId);
 
+    const classItem = await Class.findById(classId);
     if (!classItem) {
-      return res.status(404).json({ message: "Không tìm thấy class" });
+      return res.status(404).json({ message: "Không tìm thấy lớp" });
     }
 
-    return res.status(200).json({ message: "Class đã được xóa thành công" });
+    // Kiểm tra xem có sinh viên trong lớp không
+    if (classItem.studentCount > 0) {
+      return res.status(400).json({
+        message: `Không thể xóa lớp vì có ${classItem.studentCount} sinh viên đang học trong lớp này`,
+      });
+    }
+
+    await Class.findByIdAndDelete(classId);
+
+    return res.status(200).json({ message: "Xóa lớp thành công" });
   } catch (error) {
+    console.error("Error deleting class:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getOrganizationHierarchy = async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    console.log("Getting hierarchy for organizationId:", organizationId);
+
+    const organization = await Organization.findById(organizationId);
+    if (!organization) {
+      console.log("Organization not found");
+      return res.status(404).json({ message: "Không tìm thấy organization" });
+    }
+    console.log("Organization found:", organization.organizationName);
+
+    const educationLevels = await EducationLevel.find({ organizationId });
+    console.log("Found education levels:", educationLevels.length);
+
+    const result = {
+      organization: organization,
+      educationLevels: [],
+    };
+
+    for (const level of educationLevels) {
+      console.log("Processing level:", level.levelName);
+      const classes = await Class.find({ educationLevelId: level._id });
+      console.log("Found classes:", classes.length);
+
+      const levelWithClasses = {
+        ...level.toObject(),
+        classes: classes,
+      };
+
+      result.educationLevels.push(levelWithClasses);
+    }
+
+    console.log("Final result:", JSON.stringify(result, null, 2));
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in getOrganizationHierarchy:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getEducationLevelHierarchy = async (req, res) => {
+  try {
+    const { educationLevelId } = req.params;
+    console.log("Getting hierarchy for educationLevelId:", educationLevelId);
+
+    const educationLevel = await EducationLevel.findById(educationLevelId);
+    if (!educationLevel) {
+      console.log("Education level not found");
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy education level" });
+    }
+    console.log("Education level found:", educationLevel.levelName);
+
+    const classes = await Class.find({ educationLevelId });
+    console.log("Found classes:", classes.length);
+
+    const result = {
+      educationLevel: educationLevel,
+      classes: classes,
+    };
+
+    console.log("Final result:", JSON.stringify(result, null, 2));
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in getEducationLevelHierarchy:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const syncAllClassesStudentCount = async (req, res) => {
+  try {
+    const classService = require("../services/classService");
+    await classService.updateAllClassesStudentCount();
+
+    return res.status(200).json({
+      message: "Đồng bộ số lượng sinh viên cho tất cả lớp thành công",
+    });
+  } catch (error) {
+    console.error("Error syncing all classes student count:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const syncClassStudentCount = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const classService = require("../services/classService");
+    const studentCount = await classService.updateClassStudentCount(classId);
+
+    return res.status(200).json({
+      message: "Đồng bộ số lượng sinh viên thành công",
+      studentCount: studentCount,
+    });
+  } catch (error) {
+    console.error("Error syncing class student count:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -469,4 +579,8 @@ module.exports = {
   deleteOrganization,
   deleteEducationLevel,
   deleteClass,
+  getOrganizationHierarchy,
+  getEducationLevelHierarchy,
+  syncAllClassesStudentCount,
+  syncClassStudentCount,
 };

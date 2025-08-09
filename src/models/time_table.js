@@ -3,36 +3,48 @@ const mongoose = require("mongoose");
 const timeTableSchema = mongoose.model(
   "time_table",
   new mongoose.Schema({
-    day: {
-      type: String,
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Student",
       required: true,
-      enum: ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"],
+      unique: true, // Mỗi sinh viên chỉ có 1 bản ghi timeTable
     },
-    schoolWeek: String,
-    // Thời gian bắt đầu môn học (HH:mm format)
-    startTime: {
-      type: String,
-      required: true,
-    },
-    // Thời gian kết thúc môn học (HH:mm format)
-    endTime: {
-      type: String,
-      required: true,
-    },
-    // Chuỗi thời gian tổng hợp (startTime - endTime)
-    time: {
-      type: String,
-      required: true,
-    },
-    classroom: String,
-    // Thông tin môn học
-    subject: {
-      type: String,
-      required: true,
-    },
-    // Ghi chú
-    notes: String,
-    // Trạng thái (active/inactive)
+    schedules: [
+      {
+        day: {
+          type: String,
+          required: true,
+          enum: [
+            "Thứ 2",
+            "Thứ 3",
+            "Thứ 4",
+            "Thứ 5",
+            "Thứ 6",
+            "Thứ 7",
+            "Chủ nhật",
+          ],
+        },
+        schoolWeek: String,
+        startTime: {
+          type: String,
+          required: true,
+        },
+        endTime: {
+          type: String,
+          required: true,
+        },
+        time: {
+          type: String,
+          required: true,
+        },
+        classroom: String,
+        subject: {
+          type: String,
+          required: true,
+        },
+        notes: String,
+      },
+    ],
     createdAt: {
       type: Date,
       default: Date.now,

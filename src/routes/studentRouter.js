@@ -57,8 +57,8 @@ router.get("/:userId/achievement", verifyToken, getAchievement);
 //CRUD with time_table
 router.get("/:userId/time-table", verifyToken, getTimeTable);
 router.post("/:userId/time-table", verifyToken, createTimeTable);
-router.delete("/:userId/time-table/:timeTableId", verifyToken, deleteTimeTable);
-router.put("/time-table/:timeTableId", verifyToken, updateTimeTable);
+router.delete("/:userId/time-table/:scheduleId", verifyToken, deleteTimeTable);
+router.put("/:userId/time-table/:scheduleId", verifyToken, updateTimeTable);
 
 //CRUD with learning_information
 router.get(

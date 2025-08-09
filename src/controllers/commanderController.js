@@ -137,13 +137,28 @@ const deleteStudent = async (req, res) => {
     if (!student)
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
 
-    await student.deleteOne();
+    // Lưu thông tin lớp trước khi xóa
+    const classId = student.class;
 
-    await User.findOneAndDelete({ student: req.params.studentId });
+    // Xóa user liên quan
+    const user = await User.findOne({ student: req.params.studentId });
+    if (user) {
+      await User.findByIdAndDelete(user._id);
+    }
 
-    res.status(200).json({ message: "Xóa sinh viên thành công" });
+    // Xóa sinh viên
+    await Student.findByIdAndDelete(req.params.studentId);
+
+    // Cập nhật số lượng sinh viên trong lớp
+    if (classId) {
+      const classService = require("../services/classService");
+      await classService.removeStudentFromClass(classId);
+    }
+
+    return res.status(200).json({ message: "Xóa sinh viên thành công" });
   } catch (error) {
-    res.status(500).json(error);
+    console.error("Lỗi khi xóa sinh viên:", error);
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -312,10 +327,16 @@ const createStudent = async (req, res) => {
       { new: true }
     );
 
-    if (!updatedStudent)
-      return res.status(404).json({ message: "Không tìm thấy chỉ huy" });
+    // Cập nhật số lượng sinh viên trong lớp
+    if (classId) {
+      const classService = require("../services/classService");
+      await classService.addStudentToClass(classId);
+    }
 
-    return res.status(200).json("Tạo student thành công");
+    return res.status(201).json({
+      message: "Tạo sinh viên thành công",
+      student: updatedStudent,
+    });
   } catch (error) {
     console.log("Đăng ký thất bại: ", error);
     return res.status(500).json({ message: "Đăng ký thất bại" });
@@ -1071,37 +1092,43 @@ const getTimeTables = async (req, res) => {
   try {
     const { fullName, unit } = req.query;
 
-    const today = new Date();
-    const currentWeekday = today.getDay();
-    const days = ["CN", "2", "3", "4", "5", "6", "7"];
+    // Lấy tất cả timeTable từ model time_table
+    const TimeTable = require("../models/time_table");
+    let timeTables = await TimeTable.find({}).populate("studentId");
 
-    const students = await Student.find({}).populate("timeTable");
     let results = [];
 
-    students.forEach((student) => {
-      student.timeTable.forEach((timeTable) => {
-        const data = {
-          _id: timeTable._id,
-          studentId: student._id,
-          fullName: student.fullName,
-          unit: student.unit,
-          day: timeTable.day,
-          schoolWeek: timeTable.schoolWeek,
-          time: timeTable.time,
-          subject: timeTable.subject,
-          classroom: timeTable.classroom,
-        };
-        if (!fullName && !unit) {
-          if (timeTable.day === days[currentWeekday]) {
-            results.push(data);
-          }
-        } else results.push(data);
-      });
+    // Chuyển đổi dữ liệu
+    timeTables.forEach((timeTable) => {
+      if (
+        timeTable.studentId &&
+        timeTable.schedules &&
+        timeTable.schedules.length > 0
+      ) {
+        timeTable.schedules.forEach((schedule) => {
+          const data = {
+            _id: schedule._id || Math.random().toString(36).substr(2, 9),
+            studentId: timeTable.studentId._id,
+            fullName: timeTable.studentId.fullName,
+            unit: timeTable.studentId.unit,
+            day: schedule.day,
+            schoolWeek: schedule.schoolWeek,
+            time: schedule.time,
+            subject: schedule.subject,
+            classroom: schedule.classroom,
+          };
+          results.push(data);
+        });
+      }
     });
 
+    // Lọc theo tên và đơn vị nếu có
     if (fullName && unit) {
       results = results.filter((item) => {
-        return item.unit === unit && item.fullName === fullName;
+        return (
+          item.unit === unit &&
+          item.fullName.toLowerCase().includes(fullName.toLowerCase())
+        );
       });
     } else if (unit) {
       results = results.filter((item) => {
@@ -1109,7 +1136,7 @@ const getTimeTables = async (req, res) => {
       });
     } else if (fullName) {
       results = results.filter((item) => {
-        return item.fullName === fullName;
+        return item.fullName.toLowerCase().includes(fullName.toLowerCase());
       });
     }
 
@@ -1220,30 +1247,33 @@ const updateViolation = async (req, res) => {
 
 const getTimeTable = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.studentId).populate({
-      path: "timeTable",
-    });
+    const TimeTable = require("../models/time_table");
+    const timeTable = await TimeTable.findOne({
+      studentId: req.params.studentId,
+    }).populate("studentId");
 
-    if (!student) {
-      return res.status(404).json("Không tìm thấy học viên");
+    if (!timeTable) {
+      return res.status(404).json("Không tìm thấy lịch học của học viên này");
     }
 
     let results = [];
-    student.timeTable.forEach((timeTable) => {
-      const data = {
-        _id: timeTable._id,
-        fullName: student.fullName,
-        day: timeTable.day,
-        schoolWeek: timeTable.schoolWeek,
-        time: timeTable.time,
-        subject: timeTable.subject,
-        classroom: timeTable.classroom,
-      };
+    if (timeTable.schedules && timeTable.schedules.length > 0) {
+      timeTable.schedules.forEach((schedule) => {
+        const data = {
+          _id: schedule._id || Math.random().toString(36).substr(2, 9),
+          fullName: timeTable.studentId.fullName,
+          day: schedule.day,
+          schoolWeek: schedule.schoolWeek,
+          time: schedule.time,
+          subject: schedule.subject,
+          classroom: schedule.classroom,
+        };
 
-      results.push(data);
-    });
+        results.push(data);
+      });
+    }
 
-    return res.json(results);
+    return res.status(200).json(results);
   } catch (error) {
     return res.status(500).json("Lỗi server");
   }
@@ -2976,6 +3006,84 @@ const generateAutoCutRiceForStudent = async (req, res) => {
   }
 };
 
+const updateStudent = async (req, res) => {
+  try {
+    const {
+      studentId: newStudentId,
+      fullName,
+      gender,
+      birthday,
+      hometown,
+      currentAddress,
+      email,
+      phoneNumber,
+      enrollment,
+      class: newClassId,
+      educationLevel,
+      organization,
+      university,
+      unit,
+      rank,
+      positionGovernment,
+      positionParty,
+      fullPartyMember,
+      probationaryPartyMember,
+      dateOfEnlistment,
+      avatar,
+    } = req.body;
+
+    // Lấy thông tin sinh viên hiện tại để so sánh lớp
+    const currentStudent = await Student.findById(req.params.studentId);
+    if (!currentStudent) {
+      return res.status(404).json({ message: "Không tìm thấy sinh viên" });
+    }
+
+    const oldClassId = currentStudent.class;
+
+    const updatedStudent = await Student.findByIdAndUpdate(
+      req.params.studentId,
+      {
+        studentId: newStudentId,
+        fullName,
+        gender,
+        birthday,
+        hometown,
+        currentAddress,
+        email,
+        phoneNumber,
+        enrollment,
+        class: newClassId,
+        educationLevel,
+        organization,
+        university,
+        unit,
+        rank,
+        positionGovernment,
+        positionParty,
+        fullPartyMember,
+        probationaryPartyMember,
+        dateOfEnlistment,
+        avatar,
+      },
+      { new: true }
+    );
+
+    if (!updatedStudent)
+      return res.status(404).json({ message: "Không tìm thấy sinh viên" });
+
+    // Cập nhật số lượng sinh viên trong lớp nếu có thay đổi lớp
+    if (oldClassId !== newClassId) {
+      const classService = require("../services/classService");
+      await classService.transferStudentClass(oldClassId, newClassId);
+    }
+
+    return res.status(200).json(updatedStudent);
+  } catch (error) {
+    console.error("Lỗi khi cập nhật sinh viên:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 module.exports = {
   updateCommander,
   getCommander,
@@ -3039,4 +3147,5 @@ module.exports = {
   generateAutoCutRiceForAllStudents,
   getCutRiceDetail,
   generateAutoCutRiceForStudent,
+  updateStudent,
 };

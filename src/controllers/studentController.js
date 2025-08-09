@@ -584,12 +584,18 @@ const debugCutRice = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
+    // Lấy thông tin timeTable từ model mới
+    const TimeTable = require("../models/time_table");
+    const timeTable = await TimeTable.findOne({ studentId: student._id });
+    const scheduleCount = timeTable ? timeTable.schedules.length : 0;
+
     return res.status(200).json({
       studentId: student._id,
       fullName: student.fullName,
       cutRiceCount: student.cutRice.length,
       cutRice: student.cutRice,
-      timeTableCount: student.timeTable.length,
+      timeTableCount: scheduleCount,
+      timeTable: timeTable,
     });
   } catch (error) {
     return res.status(500).json({ message: "Lỗi server" });

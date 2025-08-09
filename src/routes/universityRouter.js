@@ -22,6 +22,10 @@ const {
   deleteOrganization,
   deleteEducationLevel,
   deleteClass,
+  getOrganizationHierarchy,
+  getEducationLevelHierarchy,
+  syncAllClassesStudentCount,
+  syncClassStudentCount,
 } = require("../controllers/universityController");
 
 // University routes
@@ -39,6 +43,11 @@ router.get(
   getOrganizationsByUniversity
 );
 router.get("/organizations/:organizationId", verifyToken, getOrganizationById);
+router.get(
+  "/organizations/:organizationId/hierarchy",
+  verifyToken,
+  getOrganizationHierarchy
+);
 router.post("/:universityId/organizations", verifyToken, createOrganization);
 router.put("/organizations/:organizationId", verifyToken, updateOrganization);
 router.delete(
@@ -57,6 +66,11 @@ router.get(
   "/education-levels/:educationLevelId",
   verifyToken,
   getEducationLevelById
+);
+router.get(
+  "/education-levels/:educationLevelId/hierarchy",
+  verifyToken,
+  getEducationLevelHierarchy
 );
 router.post(
   "/organizations/:organizationId/education-levels",
@@ -88,5 +102,9 @@ router.post(
 );
 router.put("/classes/:classId", verifyToken, updateClass);
 router.delete("/classes/:classId", verifyToken, deleteClass);
+
+// Sync student count routes
+router.post("/classes/sync-all", verifyToken, syncAllClassesStudentCount);
+router.post("/classes/:classId/sync", verifyToken, syncClassStudentCount);
 
 module.exports = router;

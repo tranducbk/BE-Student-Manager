@@ -123,7 +123,7 @@ const studentSchema = mongoose.model(
     gender: String,
     birthday: Date,
     hometown: String,
-    currentAddress: String, // Nơi ở hiện nay
+    currentAddress: String,
     email: String,
     phoneNumber: String,
     enrollment: Number,
@@ -182,7 +182,7 @@ const studentSchema = mongoose.model(
     tuitionFee: [tuitionFeeSchema],
     physicalResult: [physicalResultSchema],
     learningInformation: [learningInformationSchema],
-    semesterResults: [semesterResultSchema], // Kết quả học tập theo học kỳ
+    semesterResults: [semesterResultSchema],
     cutRice: [cutRiceSchema],
   })
 );

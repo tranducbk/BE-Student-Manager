@@ -78,14 +78,12 @@ const generateAutoCutRiceSchedule = async (studentId) => {
       `Student: ${student.fullName}, Organization: ${student.organization}, TravelTime: ${travelTime} phút`
     );
 
-    // Lấy lịch học của sinh viên
-    const studentWithTimeTable = await Student.findById(studentId).populate(
-      "timeTable"
-    );
-    const timeTables = studentWithTimeTable.timeTable || [];
+    // Lấy lịch học của sinh viên từ model time_table mới
+    const timeTable = await TimeTable.findOne({ studentId: studentId });
+    const schedules = timeTable?.schedules || [];
 
     console.log(
-      `[DEBUG] Found ${timeTables.length} time tables for student: ${student.fullName}`
+      `[DEBUG] Found ${schedules.length} schedules for student: ${student.fullName}`
     );
 
     // Khởi tạo lịch cắt cơm cho tuần
@@ -102,18 +100,18 @@ const generateAutoCutRiceSchedule = async (studentId) => {
     // Xử lý từng môn học (logic chính xác)
     // Nhóm lịch học theo ngày
     const timeTableByDay = {};
-    timeTables.forEach((timeTable) => {
-      const day = timeTable.day;
+    schedules.forEach((schedule) => {
+      const day = schedule.day;
       if (!timeTableByDay[day]) {
         timeTableByDay[day] = [];
       }
-      timeTableByDay[day].push(timeTable);
+      timeTableByDay[day].push(schedule);
     });
 
     // Xử lý từng ngày
-    Object.entries(timeTableByDay).forEach(([day, dayTimeTables]) => {
+    Object.entries(timeTableByDay).forEach(([day, daySchedules]) => {
       console.log(
-        `[DEBUG] Processing day: ${day} with ${dayTimeTables.length} time tables`
+        `[DEBUG] Processing day: ${day} with ${daySchedules.length} schedules`
       );
 
       // Mapping ngày từ tiếng Việt sang tiếng Anh
@@ -138,20 +136,20 @@ const generateAutoCutRiceSchedule = async (studentId) => {
       let latestEndTime = null;
 
       // Sắp xếp lịch học theo thời gian bắt đầu
-      dayTimeTables.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      daySchedules.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
       // Tạo các khoảng thời gian liên tục
       const timeRanges = [];
       let currentRange = {
-        start: dayTimeTables[0].startTime,
-        end: dayTimeTables[0].endTime,
+        start: daySchedules[0].startTime,
+        end: daySchedules[0].endTime,
       };
 
-      for (let i = 1; i < dayTimeTables.length; i++) {
-        const currentTimeTable = dayTimeTables[i];
+      for (let i = 1; i < daySchedules.length; i++) {
+        const currentSchedule = daySchedules[i];
         const timeBetweenClasses = timeHelper.getTimeDifference(
           currentRange.end,
-          currentTimeTable.startTime
+          currentSchedule.startTime
         );
         const maxGap = travelTime * 2; // 2 lần thời gian đi lại
 
@@ -163,15 +161,15 @@ const generateAutoCutRiceSchedule = async (studentId) => {
           // Tách khoảng thời gian
           timeRanges.push(currentRange);
           currentRange = {
-            start: currentTimeTable.startTime,
-            end: currentTimeTable.endTime,
+            start: currentSchedule.startTime,
+            end: currentSchedule.endTime,
           };
           console.log(
             `[DEBUG] Split time range: ${currentRange.start} - ${currentRange.end}`
           );
         } else {
           // Mở rộng khoảng thời gian hiện tại
-          currentRange.end = currentTimeTable.endTime;
+          currentRange.end = currentSchedule.endTime;
           console.log(
             `[DEBUG] Extended time range: ${currentRange.start} - ${currentRange.end}`
           );
