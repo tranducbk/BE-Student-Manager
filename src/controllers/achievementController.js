@@ -697,11 +697,11 @@ const calculateAchievementStats = async (achievement) => {
 
   // Tính số năm chiến sĩ tiên tiến và thi đua
   achievement.totalAdvancedSoldier = yearlyAchievements.filter(
-    (a) => a.title === "chiến sĩ tiên tiến"
+    (a) => a.title === "Chiến sĩ tiên tiến"
   ).length;
 
   achievement.totalCompetitiveSoldier = yearlyAchievements.filter(
-    (a) => a.title === "chiến sĩ thi đua"
+    (a) => a.title === "Chiến sĩ thi đua"
   ).length;
 
   // Tính tổng đề tài và sáng kiến khoa học (chỉ tính những cái đã duyệt)
@@ -724,7 +724,7 @@ const calculateAchievementStats = async (achievement) => {
 
   // Kiểm tra tính liên tục của các năm chiến sĩ thi đua
   const competitiveYears = yearlyAchievements
-    .filter((a) => a.title === "chiến sĩ thi đua")
+    .filter((a) => a.title === "Chiến sĩ thi đua")
     .map((a) => a.year)
     .sort((a, b) => a - b);
 

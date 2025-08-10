@@ -52,7 +52,7 @@ const yearlyAchievementSchema = new mongoose.Schema({
   },
   title: {
     type: String,
-    enum: ["chiến sĩ tiên tiến", "chiến sĩ thi đua"],
+    enum: ["Chiến sĩ tiên tiến", "Chiến sĩ thi đua"],
     required: true,
   },
   scientific: {
