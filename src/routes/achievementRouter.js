@@ -29,6 +29,14 @@ router.get(
   getRecommendationsByStudentId
 );
 
+// Lấy achievement của 1 học viên cho admin (xem chi tiết)
+router.get(
+  "/admin/:studentId",
+  verifyToken,
+  isAdmin,
+  require("../controllers/achievementController").getAchievementByStudentIdAdmin
+);
+
 // Thêm khen thưởng cho học viên (admin)
 router.post(
   "/admin/:studentId",

@@ -60,7 +60,8 @@ const getStudentsForAdmin = async (req, res) => {
   try {
     const students = await Student.find()
       .populate("achievement")
-      .select("_id fullName unit studentId achievement");
+      .populate({ path: "class", select: "className" })
+      .select("_id fullName unit studentId achievement class");
     return res.status(200).json(students);
   } catch (error) {
     console.error("Error getting students:", error);
@@ -656,6 +657,37 @@ const getRecommendationsByStudentId = async (req, res) => {
   }
 };
 
+// Lấy achievement theo studentId dành cho admin (dùng cho trang chi tiết)
+const getAchievementByStudentIdAdmin = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId).populate("achievement");
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    let achievement = student.achievement;
+    if (!achievement) {
+      achievement = new Achievement({
+        studentId: studentId,
+        yearlyAchievements: [],
+      });
+      await achievement.save();
+
+      student.achievement = achievement._id;
+      await student.save();
+    }
+
+    await calculateAchievementStats(achievement);
+
+    return res.status(200).json(achievement);
+  } catch (error) {
+    console.error("Error getting achievement by studentId (admin):", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 // Hàm tính toán thống kê và đề xuất
 const calculateAchievementStats = async (achievement) => {
   const yearlyAchievements = achievement.yearlyAchievements;
@@ -770,4 +802,5 @@ module.exports = {
   deleteYearlyAchievementByAdmin,
   getRecommendations,
   getRecommendationsByStudentId,
+  getAchievementByStudentIdAdmin,
 };

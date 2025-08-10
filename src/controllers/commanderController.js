@@ -898,7 +898,9 @@ const getTuitionFees = async (req, res) => {
   try {
     const semesterQuery = req.query.semester;
 
-    const students = await Student.find();
+    const students = await Student.find().populate([
+      { path: "university", select: "universityName" },
+    ]);
 
     let tuitionFees = [];
 
@@ -906,8 +908,12 @@ const getTuitionFees = async (req, res) => {
       student.tuitionFee.forEach((tuitionFee) => {
         tuitionFees.push({
           _id: tuitionFee._id,
+          studentId: student._id,
           fullName: student.fullName,
-          university: student.university,
+          university:
+            (student.university && student.university.universityName) || "",
+          unit: student.unit,
+          className: (student.class && student.class.className) || "",
           totalAmount: tuitionFee.totalAmount,
           semester: tuitionFee.semester,
           content: tuitionFee.content,
@@ -916,9 +922,11 @@ const getTuitionFees = async (req, res) => {
       });
     });
 
-    tuitionFees = tuitionFees.filter((tuitionFee) => {
-      return tuitionFee.semester === semesterQuery;
-    });
+    if (semesterQuery) {
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        return tuitionFee.semester === semesterQuery;
+      });
+    }
 
     const totalAmountSum = tuitionFees.reduce((sum, tuitionFee) => {
       return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
@@ -2237,9 +2245,11 @@ const getPdfTuitionFee = async (req, res) => {
       });
     });
 
-    tuitionFees = tuitionFees.filter((tuitionFee) => {
-      return tuitionFee.semester === semesterQuery;
-    });
+    if (semesterQuery) {
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        return tuitionFee.semester === semesterQuery;
+      });
+    }
 
     const totalAmountSum = tuitionFees.reduce((sum, tuitionFee) => {
       return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));

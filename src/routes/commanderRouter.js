@@ -1,5 +1,6 @@
 const multer = require("multer");
 const router = require("express").Router();
+const Student = require("../models/student");
 const { verifyToken, isAdmin } = require("../middlewares/verify");
 const { updateStudent } = require("../controllers/studentController");
 const {
@@ -231,6 +232,38 @@ router.post(
   generateAutoCutRiceForStudent
 );
 router.get("/tuitionFees", verifyToken, isAdmin, getTuitionFees);
+// Update tuition fee status (admin)
+router.put(
+  "/:studentId/tuitionFee/:tuitionFeeId/status",
+  verifyToken,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const student = await Student.findById(req.params.studentId);
+      if (!student)
+        return res.status(404).json({ message: "Không tìm thấy học viên" });
+      const fee = student.tuitionFee.id(req.params.tuitionFeeId);
+      if (!fee)
+        return res.status(404).json({ message: "Không tìm thấy học phí" });
+      const { status } = req.body;
+      if (
+        !status ||
+        !["Đã thanh toán", "Chưa thanh toán", "Đã đóng", "Chưa đóng"].includes(
+          status
+        )
+      ) {
+        return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+      }
+      fee.status = status;
+      await student.save();
+      return res
+        .status(200)
+        .json({ message: "Cập nhật trạng thái thành công" });
+    } catch (e) {
+      return res.status(500).json({ message: "Lỗi server" });
+    }
+  }
+);
 router.get("/learningResults", verifyToken, isAdmin, getLearningResults);
 router.get(
   "/learningResultBySemester",

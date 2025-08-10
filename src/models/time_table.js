@@ -7,7 +7,6 @@ const timeTableSchema = mongoose.model(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Student",
       required: true,
-      unique: true, // Mỗi sinh viên chỉ có 1 bản ghi timeTable
     },
     schedules: [
       {
