@@ -297,35 +297,54 @@ const createStudent = async (req, res) => {
       probationaryPartyMember,
       dateOfEnlistment,
       avatar,
+      familyMembers,
+      foreignRelations,
     } = req.body;
+
+    const updateData = {
+      studentId,
+      fullName: fullName ? fullName : req.body.username,
+      gender,
+      birthday,
+      hometown,
+      currentAddress,
+      email,
+      phoneNumber,
+      enrollment,
+      class: classId,
+      educationLevel,
+      organization,
+      university,
+      unit,
+      rank,
+      positionGovernment,
+      positionParty,
+      fullPartyMember,
+      probationaryPartyMember,
+      dateOfEnlistment,
+      avatar,
+    };
+
+    // Thêm thông tin gia đình nếu có
+    if (familyMembers && Array.isArray(familyMembers)) {
+      updateData.familyMembers = familyMembers;
+    }
+
+    // Thêm thông tin yếu tố nước ngoài nếu có
+    if (foreignRelations && Array.isArray(foreignRelations)) {
+      updateData.foreignRelations = foreignRelations;
+    }
 
     const updatedStudent = await Student.findByIdAndUpdate(
       newUser.student,
-      {
-        studentId,
-        fullName: fullName ? fullName : req.body.username,
-        gender,
-        birthday,
-        hometown,
-        currentAddress,
-        email,
-        phoneNumber,
-        enrollment,
-        class: classId,
-        educationLevel,
-        organization,
-        university,
-        unit,
-        rank,
-        positionGovernment,
-        positionParty,
-        fullPartyMember,
-        probationaryPartyMember,
-        dateOfEnlistment,
-        avatar,
-      },
+      updateData,
       { new: true }
-    );
+    ).populate([
+      { path: "university", select: "universityCode universityName" },
+      { path: "organization", select: "organizationName travelTime" },
+      { path: "educationLevel", select: "levelName" },
+      { path: "class", select: "className" },
+    ]);
 
     // Cập nhật số lượng sinh viên trong lớp
     if (classId) {
@@ -346,7 +365,7 @@ const createStudent = async (req, res) => {
 const getAchievements = async (req, res) => {
   try {
     const schoolYear = req.query.year;
-    const semester = parseInt(req.query.semester);
+    const semester = req.query.semester;
 
     const students = await Student.find();
 
@@ -385,8 +404,9 @@ const getAchievements = async (req, res) => {
     }
 
     allAchievements.sort((a, b) => {
-      const semesterA = parseInt(a.semester);
-      const semesterB = parseInt(b.semester);
+      // Chuyển đổi HK1, HK2, HK3 thành số để so sánh
+      const semesterA = a.semester.replace("HK", "");
+      const semesterB = b.semester.replace("HK", "");
       const yearA = parseInt(a.schoolYear.split(" ")[2]);
       const yearB = parseInt(b.schoolYear.split(" ")[2]);
 
@@ -394,7 +414,7 @@ const getAchievements = async (req, res) => {
         return yearB - yearA;
       }
 
-      return semesterB - semesterA;
+      return parseInt(semesterB) - parseInt(semesterA);
     });
 
     return res.status(200).json(allAchievements);
@@ -954,7 +974,10 @@ const getLearningResultAll = async (req, res) => {
 
     // Lọc ra học kỳ lớn nhất từ mảng
     const maxSemester = allSemesters.reduce((max, current) => {
-      return max > current ? max : current;
+      // Chuyển đổi HK1, HK2, HK3 thành số để so sánh
+      const maxNum = parseInt(max.replace("HK", ""));
+      const currentNum = parseInt(current.replace("HK", ""));
+      return maxNum > currentNum ? max : current;
     });
 
     if (!maxSemester) {
@@ -978,19 +1001,37 @@ const getLearningResultAll = async (req, res) => {
 
 const getLearningResults = async (req, res) => {
   try {
-    const semesterQuery = req.query.semester;
+    const { semesterData } = req.body;
+    console.log("Semester data received:", semesterData);
 
-    const students = await Student.find();
+    const students = await Student.find().populate([
+      { path: "university", select: "universityName" },
+      { path: "class", select: "className" },
+    ]);
+
+    console.log("Total students found:", students.length);
 
     let learningResults = [];
 
     students.forEach((student) => {
+      console.log(
+        `Student ${student.fullName} has ${student.learningInformation.length} learning records`
+      );
       student.learningInformation.forEach((learningInformation) => {
+        console.log(
+          `Learning record semester: ${learningInformation.semester}, schoolYear: ${learningInformation.schoolYear}`
+        );
         learningResults.push({
           _id: learningInformation._id,
+          studentId: student._id,
           fullName: student.fullName,
-          university: student.university,
+          studentId: student.studentId,
+          university: student.university
+            ? student.university.universityName
+            : "",
+          className: student.class ? student.class.className : "",
           semester: learningInformation.semester,
+          schoolYear: learningInformation.schoolYear,
           CPA: learningInformation.CPA,
           GPA: learningInformation.GPA,
           cumulativeCredit: learningInformation.cumulativeCredit,
@@ -1002,12 +1043,34 @@ const getLearningResults = async (req, res) => {
       });
     });
 
-    learningResults = learningResults.filter((learningResult) => {
-      return learningResult.semester === semesterQuery;
-    });
+    console.log(
+      "Total learning results before filter:",
+      learningResults.length
+    );
 
+    if (semesterData && semesterData.length > 0) {
+      // Lọc theo semester và schoolYear
+      console.log("Filtering by semester data:", semesterData);
+
+      learningResults = learningResults.filter((learningResult) => {
+        const matches = semesterData.some((filterItem) => {
+          const semesterMatch = filterItem.semester === learningResult.semester;
+          const schoolYearMatch =
+            filterItem.schoolYear === learningResult.schoolYear;
+          const result = semesterMatch && schoolYearMatch;
+          console.log(
+            `Checking: ${learningResult.semester}-${learningResult.schoolYear} vs ${filterItem.semester}-${filterItem.schoolYear} = ${result}`
+          );
+          return result;
+        });
+        return matches;
+      });
+    }
+
+    console.log("Final learning results count:", learningResults.length);
     return res.status(200).json(learningResults);
   } catch (error) {
+    console.error("Error in getLearningResults:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1289,7 +1352,12 @@ const getTimeTable = async (req, res) => {
 
 const getStudent = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.studentId);
+    const student = await Student.findById(req.params.studentId).populate([
+      { path: "university", select: "universityCode universityName" },
+      { path: "organization", select: "organizationName travelTime" },
+      { path: "educationLevel", select: "levelName" },
+      { path: "class", select: "className" },
+    ]);
 
     if (!student) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
@@ -3040,6 +3108,8 @@ const updateStudent = async (req, res) => {
       probationaryPartyMember,
       dateOfEnlistment,
       avatar,
+      familyMembers,
+      foreignRelations,
     } = req.body;
 
     // Lấy thông tin sinh viên hiện tại để so sánh lớp
@@ -3050,33 +3120,50 @@ const updateStudent = async (req, res) => {
 
     const oldClassId = currentStudent.class;
 
+    const updateData = {
+      studentId: newStudentId,
+      fullName,
+      gender,
+      birthday,
+      hometown,
+      currentAddress,
+      email,
+      phoneNumber,
+      enrollment,
+      class: newClassId,
+      educationLevel,
+      organization,
+      university,
+      unit,
+      rank,
+      positionGovernment,
+      positionParty,
+      fullPartyMember,
+      probationaryPartyMember,
+      dateOfEnlistment,
+      avatar,
+    };
+
+    // Thêm thông tin gia đình nếu có
+    if (familyMembers && Array.isArray(familyMembers)) {
+      updateData.familyMembers = familyMembers;
+    }
+
+    // Thêm thông tin yếu tố nước ngoài nếu có
+    if (foreignRelations && Array.isArray(foreignRelations)) {
+      updateData.foreignRelations = foreignRelations;
+    }
+
     const updatedStudent = await Student.findByIdAndUpdate(
       req.params.studentId,
-      {
-        studentId: newStudentId,
-        fullName,
-        gender,
-        birthday,
-        hometown,
-        currentAddress,
-        email,
-        phoneNumber,
-        enrollment,
-        class: newClassId,
-        educationLevel,
-        organization,
-        university,
-        unit,
-        rank,
-        positionGovernment,
-        positionParty,
-        fullPartyMember,
-        probationaryPartyMember,
-        dateOfEnlistment,
-        avatar,
-      },
+      updateData,
       { new: true }
-    );
+    ).populate([
+      { path: "university", select: "universityCode universityName" },
+      { path: "organization", select: "organizationName travelTime" },
+      { path: "educationLevel", select: "levelName" },
+      { path: "class", select: "className" },
+    ]);
 
     if (!updatedStudent)
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
@@ -3090,6 +3177,142 @@ const updateStudent = async (req, res) => {
     return res.status(200).json(updatedStudent);
   } catch (error) {
     console.error("Lỗi khi cập nhật sinh viên:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Lấy tất cả điểm học tập của tất cả sinh viên
+const getAllStudentsGrades = async (req, res) => {
+  try {
+    const { semester, schoolYear } = req.query;
+    console.log("=== getAllStudentsGrades START ===");
+    console.log("Query parameters:", { semester, schoolYear });
+
+    // Lấy tất cả students với thông tin đầy đủ
+    const students = await Student.find().populate([
+      { path: "university", select: "universityName" },
+      { path: "class", select: "className" },
+    ]);
+
+    console.log("Total students found:", students.length);
+
+    let allLearningResults = [];
+
+    // Lặp qua từng student để lấy kết quả học tập
+    for (const student of students) {
+      console.log(
+        `Processing student: ${student.fullName} (${student.studentId})`
+      );
+
+      try {
+        // Lấy kết quả học tập từ student model
+        const semesterResults = student.semesterResults || [];
+        console.log(
+          `  - Student has ${semesterResults.length} semester results`
+        );
+
+        // Log chi tiết semesterResults để debug
+        if (semesterResults.length > 0) {
+          console.log(
+            `  - Semester results:`,
+            semesterResults.map((r) => ({
+              semester: r.semester,
+              schoolYear: r.schoolYear,
+              averageGrade4: r.averageGrade4,
+              subjects: r.subjects?.length || 0,
+            }))
+          );
+        } else {
+          console.log(`  - No semester results found for this student`);
+        }
+
+        // Lọc theo semester và schoolYear nếu có
+        let filteredResults = semesterResults;
+
+        if (semester || schoolYear) {
+          console.log(
+            `  - Applying filters: semester=${semester}, schoolYear=${schoolYear}`
+          );
+
+          filteredResults = semesterResults.filter((result) => {
+            let matches = true;
+
+            // Lọc theo semester
+            if (semester) {
+              const semesterArray = semester.split(",").map((s) => s.trim());
+              const semesterMatch = semesterArray.includes(result.semester);
+              console.log(
+                `    - Semester check: ${result.semester} in [${semesterArray}] = ${semesterMatch}`
+              );
+              matches = matches && semesterMatch;
+            }
+
+            // Lọc theo schoolYear
+            if (schoolYear) {
+              const schoolYearArray = schoolYear
+                .split(",")
+                .map((s) => s.trim());
+              const schoolYearMatch = schoolYearArray.includes(
+                result.schoolYear
+              );
+              console.log(
+                `    - SchoolYear check: ${result.schoolYear} in [${schoolYearArray}] = ${schoolYearMatch}`
+              );
+              matches = matches && schoolYearMatch;
+            }
+
+            console.log(
+              `    - Final match for ${result.semester}-${result.schoolYear}: ${matches}`
+            );
+            return matches;
+          });
+
+          console.log(`  - After filtering: ${filteredResults.length} results`);
+        } else {
+          console.log(
+            `  - No filters applied, using all ${semesterResults.length} results`
+          );
+        }
+
+        // Thêm thông tin student vào mỗi kết quả
+        filteredResults.forEach((result) => {
+          const learningResult = {
+            _id: result._id,
+            studentId: student._id,
+            fullName: student.fullName,
+            studentCode: student.studentId,
+            university: student.university?.universityName || "",
+            className: student.class?.className || "",
+            semester: result.semester,
+            schoolYear: result.schoolYear,
+            GPA: result.averageGrade4?.toFixed(2) || "0.00",
+            CPA: result.cumulativeGrade4?.toFixed(2) || "0.00",
+            cumulativeCredit: result.cumulativeCredits || 0,
+            totalDebt: result.totalDebt || 0,
+            studentLevel: result.studentLevel || 1,
+            warningLevel: result.warningLevel || 0,
+            subjects: result.subjects || [],
+            totalCredits: result.totalCredits || 0,
+            averageGrade10: result.averageGrade10?.toFixed(2) || "0.00",
+          };
+
+          console.log(
+            `  - Adding result: ${learningResult.fullName} - ${learningResult.semester} ${learningResult.schoolYear}`
+          );
+          allLearningResults.push(learningResult);
+        });
+      } catch (error) {
+        console.log(`Error processing student ${student._id}:`, error);
+      }
+    }
+
+    console.log("=== getAllStudentsGrades END ===");
+    console.log("Final learning results count:", allLearningResults.length);
+    console.log("Sample result:", allLearningResults[0]);
+
+    return res.status(200).json(allLearningResults);
+  } catch (error) {
+    console.error("Error in getAllStudentsGrades:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -3158,4 +3381,5 @@ module.exports = {
   getCutRiceDetail,
   generateAutoCutRiceForStudent,
   updateStudent,
+  getAllStudentsGrades,
 };

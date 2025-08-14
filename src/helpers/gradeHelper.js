@@ -2,6 +2,16 @@
  * Helper functions để tính điểm và chuyển đổi giữa các hệ điểm
  */
 
+// Helper function để format semester thành "HK1", "HK2", "HK3"
+const formatSemester = (semester) => {
+  if (typeof semester === "number") {
+    return `HK${semester}`;
+  } else if (typeof semester === "string" && !semester.startsWith("HK")) {
+    return `HK${semester}`;
+  }
+  return semester;
+};
+
 // Bảng chuyển đổi điểm chữ sang điểm hệ 4
 const LETTER_TO_GRADE_4 = {
   "A+": 4.0,
@@ -127,6 +137,21 @@ const calculateAverageGrade4 = (subjects) => {
 
   subjects.forEach((subject) => {
     totalGradePoints += subject.gradePoint4 * subject.credits;
+    totalCredits += subject.credits;
+  });
+
+  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+};
+
+// Tính điểm trung bình hệ 10 cho một danh sách môn học
+const calculateAverageGrade10 = (subjects) => {
+  if (!subjects || subjects.length === 0) return 0.0;
+
+  let totalGradePoints = 0;
+  let totalCredits = 0;
+
+  subjects.forEach((subject) => {
+    totalGradePoints += subject.gradePoint10 * subject.credits;
     totalCredits += subject.credits;
   });
 
@@ -297,6 +322,7 @@ const calculateAverageFromGrade4 = (grades) => {
 };
 
 module.exports = {
+  formatSemester,
   LETTER_TO_GRADE_4,
   LETTER_TO_GRADE_10,
   GRADE_4_TO_LETTER,
@@ -308,6 +334,7 @@ module.exports = {
   grade4ToGrade10,
   grade10ToGrade4,
   calculateAverageGrade4,
+  calculateAverageGrade10,
   calculateSemesterAverage10FromGpa4,
   calculateTotalCredits,
   calculateCumulativeGrade4,

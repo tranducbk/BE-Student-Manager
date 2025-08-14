@@ -48,11 +48,18 @@ const getSemesterGrades = async (req, res) => {
     }
 
     const semesterResults = user.student.semesterResults || [];
-    const targetSemester = semesterResults.find(
-      (result) =>
-        result.semester === parseInt(semester) &&
-        result.schoolYear === schoolYear
-    );
+
+    // Đảm bảo semester là string format "HK1", "HK2", "HK3"
+    const formattedSemester = gradeHelper.formatSemester(semester);
+
+    const targetSemester = semesterResults.find((result) => {
+      // Chuyển đổi result.semester cũ thành format mới nếu cần
+      const resultSemester = gradeHelper.formatSemester(result.semester);
+
+      return (
+        resultSemester === formattedSemester && result.schoolYear === schoolYear
+      );
+    });
 
     if (!targetSemester) {
       return res.status(404).json({
@@ -86,11 +93,18 @@ const addSemesterGrades = async (req, res) => {
       return res.status(400).json({ message: "Dữ liệu không hợp lệ" });
     }
 
-    // Kiểm tra học kỳ đã tồn tại chưa
-    const existingSemester = user.student.semesterResults.find(
-      (result) =>
-        result.semester === semester && result.schoolYear === schoolYear
-    );
+    // Đảm bảo semester là string format "HK1", "HK2", "HK3"
+    const formattedSemester = gradeHelper.formatSemester(semester);
+
+    // Kiểm tra học kỳ đã tồn tại chưa (xử lý cả dữ liệu cũ)
+    const existingSemester = user.student.semesterResults.find((result) => {
+      // Chuyển đổi result.semester cũ thành format mới nếu cần
+      const resultSemester = gradeHelper.formatSemester(result.semester);
+
+      return (
+        resultSemester === formattedSemester && result.schoolYear === schoolYear
+      );
+    });
 
     if (existingSemester) {
       return res.status(400).json({
@@ -100,23 +114,33 @@ const addSemesterGrades = async (req, res) => {
 
     // Tạo kết quả môn học từ dữ liệu đầu vào
     const processedSubjects = subjects.map((subject) => {
-      const { subjectCode, subjectName, credits, letterGrade } = subject;
+      const { subjectCode, subjectName, credits, gradePoint10 } = subject;
 
-      if (!gradeHelper.isValidLetterGrade(letterGrade)) {
-        throw new Error(`Điểm chữ không hợp lệ: ${letterGrade}`);
+      // Validate điểm hệ 10
+      const grade10 = parseFloat(gradePoint10);
+      if (isNaN(grade10) || grade10 < 0 || grade10 > 10) {
+        throw new Error(`Điểm hệ 10 không hợp lệ: ${gradePoint10}`);
       }
 
-      return gradeHelper.createSubjectResult(
+      // Tính điểm chữ từ điểm hệ 10
+      const letterGrade = gradeHelper.grade10ToLetter(grade10);
+
+      // Tính điểm hệ 4 từ điểm chữ
+      const gradePoint4 = gradeHelper.letterToGrade4(letterGrade);
+
+      return {
         subjectCode,
         subjectName,
         credits,
-        letterGrade
-      );
+        letterGrade,
+        gradePoint4,
+        gradePoint10,
+      };
     });
 
     // Tạo kết quả học kỳ mới
     const newSemesterResult = {
-      semester,
+      semester: formattedSemester,
       schoolYear,
       subjects: processedSubjects,
       totalCredits: gradeHelper.calculateTotalCredits(processedSubjects),
@@ -162,12 +186,18 @@ const updateSemesterGrades = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
-    // Tìm học kỳ cần cập nhật
-    const semesterIndex = user.student.semesterResults.findIndex(
-      (result) =>
-        result.semester === parseInt(semester) &&
-        result.schoolYear === schoolYear
-    );
+    // Đảm bảo semester là string format "HK1", "HK2", "HK3"
+    const formattedSemester = gradeHelper.formatSemester(semester);
+
+    // Tìm học kỳ cần cập nhật (xử lý cả dữ liệu cũ)
+    const semesterIndex = user.student.semesterResults.findIndex((result) => {
+      // Chuyển đổi result.semester cũ thành format mới nếu cần
+      const resultSemester = gradeHelper.formatSemester(result.semester);
+
+      return (
+        resultSemester === formattedSemester && result.schoolYear === schoolYear
+      );
+    });
 
     if (semesterIndex === -1) {
       return res.status(404).json({
@@ -177,22 +207,38 @@ const updateSemesterGrades = async (req, res) => {
 
     // Xử lý dữ liệu môn học
     const processedSubjects = subjects.map((subject) => {
-      const { subjectCode, subjectName, credits, letterGrade } = subject;
+      const { subjectCode, subjectName, credits, gradePoint10 } = subject;
 
-      if (!gradeHelper.isValidLetterGrade(letterGrade)) {
-        throw new Error(`Điểm chữ không hợp lệ: ${letterGrade}`);
+      // Validate điểm hệ 10
+      const grade10 = parseFloat(gradePoint10);
+      if (isNaN(grade10) || grade10 < 0 || grade10 > 10) {
+        throw new Error(`Điểm hệ 10 không hợp lệ: ${gradePoint10}`);
       }
 
-      return gradeHelper.createSubjectResult(
+      // Tính điểm chữ từ điểm hệ 10
+      const letterGrade = gradeHelper.grade10ToLetter(grade10);
+
+      // Tính điểm hệ 4 từ điểm chữ
+      const gradePoint4 = gradeHelper.letterToGrade4(letterGrade);
+
+      return {
         subjectCode,
         subjectName,
         credits,
-        letterGrade
-      );
+        letterGrade,
+        gradePoint4,
+        gradePoint10,
+      };
     });
 
     // Cập nhật kết quả học kỳ
     user.student.semesterResults[semesterIndex].subjects = processedSubjects;
+    user.student.semesterResults[semesterIndex].totalCredits =
+      gradeHelper.calculateTotalCredits(processedSubjects);
+    user.student.semesterResults[semesterIndex].averageGrade4 =
+      gradeHelper.calculateAverageGrade4(processedSubjects);
+    user.student.semesterResults[semesterIndex].averageGrade10 =
+      gradeHelper.calculateAverageGrade10(processedSubjects);
     user.student.semesterResults[semesterIndex].updatedAt = new Date();
 
     // Cập nhật điểm tích lũy cho tất cả học kỳ
@@ -220,12 +266,18 @@ const deleteSemesterGrades = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
-    // Tìm và xóa học kỳ
-    const semesterIndex = user.student.semesterResults.findIndex(
-      (result) =>
-        result.semester === parseInt(semester) &&
-        result.schoolYear === schoolYear
-    );
+    // Đảm bảo semester là string format "HK1", "HK2", "HK3"
+    const formattedSemester = gradeHelper.formatSemester(semester);
+
+    // Tìm và xóa học kỳ (xử lý cả dữ liệu cũ)
+    const semesterIndex = user.student.semesterResults.findIndex((result) => {
+      // Chuyển đổi result.semester cũ thành format mới nếu cần
+      const resultSemester = gradeHelper.formatSemester(result.semester);
+
+      return (
+        resultSemester === formattedSemester && result.schoolYear === schoolYear
+      );
+    });
 
     if (semesterIndex === -1) {
       return res.status(404).json({

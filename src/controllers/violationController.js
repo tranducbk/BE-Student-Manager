@@ -12,8 +12,9 @@ const getStudentViolations = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
-    const violations = await Violation.find({ studentId: user.student._id })
-      .sort({ dateOfViolation: -1 });
+    const violations = await Violation.find({
+      studentId: user.student._id,
+    }).sort({ dateOfViolation: -1 });
 
     return res.status(200).json(violations);
   } catch (error) {
@@ -32,17 +33,18 @@ const getViolationsByYearAndSemester = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
-    const query = { 
+    const query = {
       studentId: user.student._id,
-      year: parseInt(year)
+      year: parseInt(year),
     };
 
     if (semester) {
-      query.semester = parseInt(semester);
+      query.semester = semester;
     }
 
-    const violations = await Violation.find(query)
-      .sort({ dateOfViolation: -1 });
+    const violations = await Violation.find(query).sort({
+      dateOfViolation: -1,
+    });
 
     return res.status(200).json(violations);
   } catch (error) {
@@ -55,7 +57,16 @@ const getViolationsByYearAndSemester = async (req, res) => {
 const addViolation = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { content, dateOfViolation, penalty, year, semester, severity, status, notes } = req.body;
+    const {
+      content,
+      dateOfViolation,
+      penalty,
+      year,
+      semester,
+      severity,
+      status,
+      notes,
+    } = req.body;
 
     const user = await User.findById(userId).populate("student");
     if (!user || !user.student) {
@@ -144,9 +155,9 @@ const getViolationStats = async (req, res) => {
     // Thống kê theo năm
     const statsByYear = {};
     const statsBySeverity = {
-      "nhẹ": 0,
+      nhẹ: 0,
       "trung bình": 0,
-      "nặng": 0,
+      nặng: 0,
       "rất nặng": 0,
     };
     const statsByStatus = {
@@ -156,9 +167,9 @@ const getViolationStats = async (req, res) => {
       "đã hủy": 0,
     };
 
-    violations.forEach(violation => {
+    violations.forEach((violation) => {
       const year = violation.year;
-      
+
       if (!statsByYear[year]) {
         statsByYear[year] = {
           total: 0,
@@ -169,10 +180,10 @@ const getViolationStats = async (req, res) => {
       }
 
       statsByYear[year].total++;
-      
-      if (violation.semester === 1) {
+
+      if (violation.semester === "HK1") {
         statsByYear[year].semester1++;
-      } else if (violation.semester === 2) {
+      } else if (violation.semester === "HK2") {
         statsByYear[year].semester2++;
       } else {
         statsByYear[year].noSemester++;
@@ -195,7 +206,9 @@ const getViolationStats = async (req, res) => {
       statsBySeverity,
       statsByStatus,
       recentViolations: violations
-        .sort((a, b) => new Date(b.dateOfViolation) - new Date(a.dateOfViolation))
+        .sort(
+          (a, b) => new Date(b.dateOfViolation) - new Date(a.dateOfViolation)
+        )
         .slice(0, 5), // 5 vi phạm gần nhất
     };
 
@@ -209,12 +222,19 @@ const getViolationStats = async (req, res) => {
 // Lấy tất cả vi phạm (cho admin)
 const getAllViolations = async (req, res) => {
   try {
-    const { page = 1, limit = 10, year, semester, severity, status } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      year,
+      semester,
+      severity,
+      status,
+    } = req.query;
 
     const query = {};
-    
+
     if (year) query.year = parseInt(year);
-    if (semester) query.semester = parseInt(semester);
+    if (semester) query.semester = semester;
     if (severity) query.severity = severity;
     if (status) query.status = status;
 
@@ -246,4 +266,4 @@ module.exports = {
   deleteViolation,
   getViolationStats,
   getAllViolations,
-}; 
+};

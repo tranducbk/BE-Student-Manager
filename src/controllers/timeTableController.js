@@ -131,7 +131,7 @@ const deleteTimeTable = async (req, res) => {
 
     return res.status(200).json({
       message:
-        "Schedule đã được xóa thành công và đã cập nhật lịch cắt cơm tự động",
+        "Lịch học đã được xóa thành công và đã cập nhật lịch cắt cơm tự động",
     });
   } catch (error) {
     console.error(error.message);

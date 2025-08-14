@@ -22,6 +22,26 @@ const {
   resetAutoCutRice,
   updateManualCutRice,
   debugCutRice, // Thêm import
+  // CRUD cho thông tin người thân
+  addFamilyMember,
+  getFamilyMembers,
+  updateFamilyMember,
+  deleteFamilyMember,
+  // CRUD cho mối quan hệ nước ngoài
+  addForeignRelation,
+  getForeignRelations,
+  updateForeignRelation,
+  deleteForeignRelation,
+  // CRUD cho xếp loại đảng viên
+  addPartyRating,
+  getPartyRatings,
+  updatePartyRating,
+  deletePartyRating,
+  // CRUD cho xếp loại rèn luyện
+  addTrainingRating,
+  getTrainingRatings,
+  updateTrainingRating,
+  deleteTrainingRating,
 } = require("../controllers/studentController");
 
 // Import từ các controller đã tách
@@ -151,5 +171,61 @@ router.get(
 router.post("/classes", verifyToken, createClass);
 router.put("/classes/:classId", verifyToken, updateClass);
 router.delete("/classes/:classId", verifyToken, deleteClass);
+
+// ===== ROUTES CHO THÔNG TIN NGƯỜI THÂN =====
+router.post("/:studentId/family-members", verifyToken, addFamilyMember);
+router.get("/:studentId/family-members", verifyToken, getFamilyMembers);
+router.put(
+  "/:studentId/family-members/:familyMemberId",
+  verifyToken,
+  updateFamilyMember
+);
+router.delete(
+  "/:studentId/family-members/:familyMemberId",
+  verifyToken,
+  deleteFamilyMember
+);
+
+// ===== ROUTES CHO MỐI QUAN HỆ NƯỚC NGOÀI =====
+router.post("/:studentId/foreign-relations", verifyToken, addForeignRelation);
+router.get("/:studentId/foreign-relations", verifyToken, getForeignRelations);
+router.put(
+  "/:studentId/foreign-relations/:foreignRelationId",
+  verifyToken,
+  updateForeignRelation
+);
+router.delete(
+  "/:studentId/foreign-relations/:foreignRelationId",
+  verifyToken,
+  deleteForeignRelation
+);
+
+// ===== ROUTES CHO XẾP LOẠI ĐẢNG VIÊN =====
+router.post("/:studentId/party-ratings", verifyToken, addPartyRating);
+router.get("/:studentId/party-ratings", verifyToken, getPartyRatings);
+router.put(
+  "/:studentId/party-ratings/:partyRatingId",
+  verifyToken,
+  updatePartyRating
+);
+router.delete(
+  "/:studentId/party-ratings/:partyRatingId",
+  verifyToken,
+  deletePartyRating
+);
+
+// ===== ROUTES CHO XẾP LOẠI RÈN LUYỆN =====
+router.post("/:studentId/training-ratings", verifyToken, addTrainingRating);
+router.get("/:studentId/training-ratings", verifyToken, getTrainingRatings);
+router.put(
+  "/:studentId/training-ratings/:trainingRatingId",
+  verifyToken,
+  updateTrainingRating
+);
+router.delete(
+  "/:studentId/training-ratings/:trainingRatingId",
+  verifyToken,
+  deleteTrainingRating
+);
 
 module.exports = router;

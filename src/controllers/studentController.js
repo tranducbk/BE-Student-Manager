@@ -22,7 +22,15 @@ const getAllStudentsWithHierarchy = async (req, res) => {
 
 const getStudent = async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate("student");
+    const user = await User.findById(req.params.userId).populate({
+      path: "student",
+      populate: [
+        { path: "university", select: "universityCode universityName" },
+        { path: "organization", select: "organizationName travelTime" },
+        { path: "educationLevel", select: "levelName" },
+        { path: "class", select: "className" },
+      ],
+    });
 
     if (!user) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
@@ -60,35 +68,54 @@ const updateStudent = async (req, res) => {
       probationaryPartyMember,
       dateOfEnlistment,
       avatar,
+      familyMembers,
+      foreignRelations,
     } = req.body;
+
+    const updateData = {
+      studentId: newStudentId,
+      fullName,
+      gender,
+      birthday,
+      hometown,
+      currentAddress,
+      email,
+      phoneNumber,
+      enrollment,
+      class: classId,
+      educationLevel,
+      organization,
+      university,
+      unit,
+      rank,
+      positionGovernment,
+      positionParty,
+      fullPartyMember,
+      probationaryPartyMember,
+      dateOfEnlistment,
+      avatar,
+    };
+
+    // Thêm thông tin gia đình nếu có
+    if (familyMembers && Array.isArray(familyMembers)) {
+      updateData.familyMembers = familyMembers;
+    }
+
+    // Thêm thông tin yếu tố nước ngoài nếu có
+    if (foreignRelations && Array.isArray(foreignRelations)) {
+      updateData.foreignRelations = foreignRelations;
+    }
 
     const updatedStudent = await Student.findByIdAndUpdate(
       req.params.studentId,
-      {
-        studentId: newStudentId,
-        fullName,
-        gender,
-        birthday,
-        hometown,
-        currentAddress,
-        email,
-        phoneNumber,
-        enrollment,
-        class: classId,
-        educationLevel,
-        organization,
-        university,
-        unit,
-        rank,
-        positionGovernment,
-        positionParty,
-        fullPartyMember,
-        probationaryPartyMember,
-        dateOfEnlistment,
-        avatar,
-      },
+      updateData,
       { new: true }
-    );
+    ).populate([
+      { path: "university", select: "universityCode universityName" },
+      { path: "organization", select: "organizationName travelTime" },
+      { path: "educationLevel", select: "levelName" },
+      { path: "class", select: "className" },
+    ]);
 
     if (!updatedStudent)
       return res.status(404).json("Không tìm thấy sinh viên");
@@ -609,6 +636,410 @@ const debugCutRice = async (req, res) => {
   }
 };
 
+// ===== CRUD CHO THÔNG TIN NGƯỜI THÂN =====
+
+// Thêm thông tin người thân
+const addFamilyMember = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const familyMemberData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    student.familyMembers.push(familyMemberData);
+    await student.save();
+
+    res.status(201).json({
+      message: "Thêm thông tin người thân thành công",
+      familyMember: familyMemberData,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Lấy danh sách thông tin người thân
+const getFamilyMembers = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    res.status(200).json({
+      familyMembers: student.familyMembers,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Cập nhật thông tin người thân
+const updateFamilyMember = async (req, res) => {
+  try {
+    const { studentId, familyMemberId } = req.params;
+    const updateData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const familyMember = student.familyMembers.id(familyMemberId);
+    if (!familyMember) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin người thân" });
+    }
+
+    Object.assign(familyMember, updateData);
+    await student.save();
+
+    res.status(200).json({
+      message: "Cập nhật thông tin người thân thành công",
+      familyMember,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Xóa thông tin người thân
+const deleteFamilyMember = async (req, res) => {
+  try {
+    const { studentId, familyMemberId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const familyMember = student.familyMembers.id(familyMemberId);
+    if (!familyMember) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin người thân" });
+    }
+
+    familyMember.remove();
+    await student.save();
+
+    res.status(200).json({
+      message: "Xóa thông tin người thân thành công",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===== CRUD CHO MỐI QUAN HỆ NƯỚC NGOÀI =====
+
+// Thêm mối quan hệ nước ngoài
+const addForeignRelation = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const foreignRelationData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    student.foreignRelations.push(foreignRelationData);
+    await student.save();
+
+    res.status(201).json({
+      message: "Thêm mối quan hệ nước ngoài thành công",
+      foreignRelation: foreignRelationData,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Lấy danh sách mối quan hệ nước ngoài
+const getForeignRelations = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    res.status(200).json({
+      foreignRelations: student.foreignRelations,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Cập nhật mối quan hệ nước ngoài
+const updateForeignRelation = async (req, res) => {
+  try {
+    const { studentId, foreignRelationId } = req.params;
+    const updateData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const foreignRelation = student.foreignRelations.id(foreignRelationId);
+    if (!foreignRelation) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy mối quan hệ nước ngoài" });
+    }
+
+    Object.assign(foreignRelation, updateData);
+    await student.save();
+
+    res.status(200).json({
+      message: "Cập nhật mối quan hệ nước ngoài thành công",
+      foreignRelation,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Xóa mối quan hệ nước ngoài
+const deleteForeignRelation = async (req, res) => {
+  try {
+    const { studentId, foreignRelationId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const foreignRelation = student.foreignRelations.id(foreignRelationId);
+    if (!foreignRelation) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy mối quan hệ nước ngoài" });
+    }
+
+    foreignRelation.remove();
+    await student.save();
+
+    res.status(200).json({
+      message: "Xóa mối quan hệ nước ngoài thành công",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===== CRUD CHO XẾP LOẠI ĐẢNG VIÊN =====
+
+// Thêm xếp loại đảng viên
+const addPartyRating = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const partyRatingData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    student.partyRatings.push(partyRatingData);
+    await student.save();
+
+    res.status(201).json({
+      message: "Thêm xếp loại đảng viên thành công",
+      partyRating: partyRatingData,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Lấy danh sách xếp loại đảng viên
+const getPartyRatings = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    res.status(200).json({
+      partyRatings: student.partyRatings,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Cập nhật xếp loại đảng viên
+const updatePartyRating = async (req, res) => {
+  try {
+    const { studentId, partyRatingId } = req.params;
+    const updateData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const partyRating = student.partyRatings.id(partyRatingId);
+    if (!partyRating) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy xếp loại đảng viên" });
+    }
+
+    Object.assign(partyRating, updateData);
+    await student.save();
+
+    res.status(200).json({
+      message: "Cập nhật xếp loại đảng viên thành công",
+      partyRating,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Xóa xếp loại đảng viên
+const deletePartyRating = async (req, res) => {
+  try {
+    const { studentId, partyRatingId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const partyRating = student.partyRatings.id(partyRatingId);
+    if (!partyRating) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy xếp loại đảng viên" });
+    }
+
+    partyRating.remove();
+    await student.save();
+
+    res.status(200).json({
+      message: "Xóa xếp loại đảng viên thành công",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===== CRUD CHO XẾP LOẠI RÈN LUYỆN =====
+
+// Thêm xếp loại rèn luyện
+const addTrainingRating = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const trainingRatingData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    student.trainingRatings.push(trainingRatingData);
+    await student.save();
+
+    res.status(201).json({
+      message: "Thêm xếp loại rèn luyện thành công",
+      trainingRating: trainingRatingData,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Lấy danh sách xếp loại rèn luyện
+const getTrainingRatings = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    res.status(200).json({
+      trainingRatings: student.trainingRatings,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Cập nhật xếp loại rèn luyện
+const updateTrainingRating = async (req, res) => {
+  try {
+    const { studentId, trainingRatingId } = req.params;
+    const updateData = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const trainingRating = student.trainingRatings.id(trainingRatingId);
+    if (!trainingRating) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy xếp loại rèn luyện" });
+    }
+
+    Object.assign(trainingRating, updateData);
+    await student.save();
+
+    res.status(200).json({
+      message: "Cập nhật xếp loại rèn luyện thành công",
+      trainingRating,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Xóa xếp loại rèn luyện
+const deleteTrainingRating = async (req, res) => {
+  try {
+    const { studentId, trainingRatingId } = req.params;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+    }
+
+    const trainingRating = student.trainingRatings.id(trainingRatingId);
+    if (!trainingRating) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy xếp loại rèn luyện" });
+    }
+
+    trainingRating.remove();
+    await student.save();
+
+    res.status(200).json({
+      message: "Xóa xếp loại rèn luyện thành công",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAllStudentsWithHierarchy,
   updateStudent,
@@ -631,6 +1062,22 @@ module.exports = {
   updateTuitionFee,
   updateLearningResult,
   debugCutRice, // Thêm function debug
+  addFamilyMember,
+  getFamilyMembers,
+  updateFamilyMember,
+  deleteFamilyMember,
+  addForeignRelation,
+  getForeignRelations,
+  updateForeignRelation,
+  deleteForeignRelation,
+  addPartyRating,
+  getPartyRatings,
+  updatePartyRating,
+  deletePartyRating,
+  addTrainingRating,
+  getTrainingRatings,
+  updateTrainingRating,
+  deleteTrainingRating,
   ...universityController,
   ...timeTableController,
 };

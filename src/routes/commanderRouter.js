@@ -66,6 +66,7 @@ const {
   generateAutoCutRiceForAllStudents,
   getCutRiceDetail,
   generateAutoCutRiceForStudent,
+  getAllStudentsGrades,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -264,7 +265,8 @@ router.put(
     }
   }
 );
-router.get("/learningResults", verifyToken, isAdmin, getLearningResults);
+router.post("/learningResults", verifyToken, isAdmin, getLearningResults);
+router.get("/allStudentsGrades", verifyToken, isAdmin, getAllStudentsGrades);
 router.get(
   "/learningResultBySemester",
   verifyToken,

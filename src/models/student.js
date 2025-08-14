@@ -54,7 +54,7 @@ const subjectResultSchema = new mongoose.Schema({
 
 // Schema cho kết quả học tập theo học kỳ
 const semesterResultSchema = new mongoose.Schema({
-  semester: { type: Number, required: true }, // Học kỳ (1 hoặc 2)
+  semester: { type: String, enum: ["HK1", "HK2", "HK3"], required: true }, // Học kỳ
   schoolYear: { type: String, required: true }, // Năm học
   subjects: [subjectResultSchema], // Danh sách môn học
   totalCredits: { type: Number, default: 0 }, // Tổng số tín chỉ
@@ -113,6 +113,51 @@ const cutRiceSchema = new mongoose.Schema({
     default: Date.now,
   },
   notes: String,
+});
+
+// Schema cho thông tin người thân
+const familyMemberSchema = new mongoose.Schema({
+  relationship: { type: String, required: true }, // Quan hệ (bố, mẹ, anh, chị, em...)
+  fullName: { type: String, required: true }, // Họ và tên
+  birthday: { type: Date, required: true }, // Ngày sinh
+  occupation: { type: String, required: true }, // Nghề nghiệp
+});
+
+// Schema cho mối quan hệ có yếu tố nước ngoài
+const foreignRelationSchema = new mongoose.Schema({
+  relationship: { type: String, required: true }, // Quan hệ (chú ruột, cô ruột, anh em họ...)
+  fullName: { type: String, required: true }, // Họ và tên
+  birthday: { type: Date, required: true }, // Ngày sinh
+  country: { type: String, required: true }, // Quốc gia (Liên bang Nga, Ý...)
+  reason: { type: String, required: true }, // Lý do (định cư, du học, công tác...)
+  nationality: { type: String, required: true }, // Quốc tịch
+});
+
+// Schema cho xếp loại đảng viên theo năm
+const partyRatingSchema = new mongoose.Schema({
+  decisionNumber: { type: String, required: true }, // Số quyết định
+  decisionDate: { type: Date, required: true }, // Ngày quyết định
+  year: { type: Number, required: true }, // Năm xếp loại
+  rating: {
+    type: String,
+    enum: ["HTXSNV", "HTTNV", "HTNV", "KHTNV"], // Hoàn thành xuất sắc nhiệm vụ, Hoàn thành tốt nhiệm vụ, Hoàn thành nhiệm vụ, Không hoàn thành nhiệm vụ
+    required: true,
+  },
+});
+
+// Schema cho xếp loại rèn luyện theo năm
+const trainingRatingSchema = new mongoose.Schema({
+  year: { type: Number, required: true }, // Năm học
+  semester1: {
+    type: String,
+    enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
+    required: true,
+  }, // Xếp loại học kỳ 1
+  semester2: {
+    type: String,
+    enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
+    required: true,
+  }, // Xếp loại học kỳ 2
 });
 
 const studentSchema = mongoose.model(
@@ -184,6 +229,14 @@ const studentSchema = mongoose.model(
     learningInformation: [learningInformationSchema],
     semesterResults: [semesterResultSchema],
     cutRice: [cutRiceSchema],
+    // Thông tin người thân
+    familyMembers: [familyMemberSchema],
+    // Mối quan hệ có yếu tố nước ngoài
+    foreignRelations: [foreignRelationSchema],
+    // Xếp loại đảng viên theo năm
+    partyRatings: [partyRatingSchema],
+    // Xếp loại rèn luyện theo năm
+    trainingRatings: [trainingRatingSchema],
   })
 );
 
