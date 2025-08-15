@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const gradeHelper = require("../helpers/gradeHelper");
+const Student = require("../models/student"); // Added import for Student model
 
 // Lấy kết quả học tập của sinh viên
 const getStudentGrades = async (req, res) => {
@@ -73,6 +74,47 @@ const getSemesterGrades = async (req, res) => {
     return res.status(200).json(targetSemester);
   } catch (error) {
     console.error("Error getting semester grades:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Lấy kết quả học tập theo học kỳ cho admin (sử dụng studentId)
+const getSemesterGradesByStudentId = async (req, res) => {
+  try {
+    const { studentId, semester, schoolYear } = req.params;
+
+    // Tìm student trực tiếp bằng studentId
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy sinh viên" });
+    }
+
+    const semesterResults = student.semesterResults || [];
+
+    // Đảm bảo semester là string format "HK1", "HK2", "HK3"
+    const formattedSemester = gradeHelper.formatSemester(semester);
+
+    const targetSemester = semesterResults.find((result) => {
+      // Chuyển đổi result.semester cũ thành format mới nếu cần
+      const resultSemester = gradeHelper.formatSemester(result.semester);
+
+      return (
+        resultSemester === formattedSemester && result.schoolYear === schoolYear
+      );
+    });
+
+    if (!targetSemester) {
+      return res.status(404).json({
+        message: `Không tìm thấy kết quả học tập cho học kỳ ${semester} năm ${schoolYear}`,
+      });
+    }
+
+    // Cập nhật kết quả học kỳ
+    gradeHelper.updateSemesterResult(targetSemester);
+
+    return res.status(200).json(targetSemester);
+  } catch (error) {
+    console.error("Error getting semester grades by studentId:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -413,4 +455,5 @@ module.exports = {
   getGradeInfo,
   convertGrade,
   calculateAverage,
+  getSemesterGradesByStudentId, // Added new function to exports
 };

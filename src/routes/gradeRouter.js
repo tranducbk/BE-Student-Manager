@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { verifyToken } = require("../middlewares/verify");
+const { verifyToken, isAdmin } = require("../middlewares/verify");
 const {
   getStudentGrades,
   getSemesterGrades,
@@ -9,6 +9,7 @@ const {
   getGradeInfo,
   convertGrade,
   calculateAverage,
+  getSemesterGradesByStudentId,
 } = require("../controllers/gradeController");
 
 // Lấy kết quả học tập của sinh viên
@@ -16,6 +17,14 @@ router.get("/:userId", verifyToken, getStudentGrades);
 
 // Lấy kết quả học tập theo học kỳ
 router.get("/:userId/:semester/:schoolYear", verifyToken, getSemesterGrades);
+
+// Lấy kết quả học tập theo học kỳ cho admin (sử dụng studentId)
+router.get(
+  "/student/:studentId/:semester/:schoolYear",
+  verifyToken,
+  isAdmin,
+  getSemesterGradesByStudentId
+);
 
 // Thêm kết quả học tập cho học kỳ
 router.post("/:userId", verifyToken, addSemesterGrades);
