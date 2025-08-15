@@ -63,7 +63,7 @@ const generateAutoCutRiceSchedule = async (studentId) => {
     // Lấy thông tin organization từ student
     const Organization = require("../models/organization");
     const organization = await Organization.findOne({
-      organizationName: student.organization,
+      _id: student.organization,
       universityId: student.university,
     });
 
