@@ -14,6 +14,7 @@ const achievementSchema = new mongoose.Schema({
 const tuitionFeeSchema = new mongoose.Schema({
   totalAmount: String,
   semester: String,
+  schoolYear: String,
   content: String,
   status: String,
 });

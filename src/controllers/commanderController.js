@@ -936,6 +936,7 @@ const getTuitionFees = async (req, res) => {
           className: (student.class && student.class.className) || "",
           totalAmount: tuitionFee.totalAmount,
           semester: tuitionFee.semester,
+          schoolYear: tuitionFee.schoolYear,
           content: tuitionFee.content,
           status: tuitionFee.status,
         });
@@ -2307,6 +2308,7 @@ const getPdfTuitionFee = async (req, res) => {
           university: student.university,
           totalAmount: tuitionFee.totalAmount,
           semester: tuitionFee.semester,
+          schoolYear: tuitionFee.schoolYear,
           content: tuitionFee.content,
           status: tuitionFee.status,
         });
@@ -3283,6 +3285,7 @@ const getAllStudentsGrades = async (req, res) => {
             studentCode: student.studentId,
             university: student.university?.universityName || "",
             className: student.class?.className || "",
+            unit: student.unit || "",
             semester: result.semester,
             schoolYear: result.schoolYear,
             GPA: result.averageGrade4?.toFixed(2) || "0.00",

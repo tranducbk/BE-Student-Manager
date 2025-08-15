@@ -99,10 +99,10 @@ const updateSemester = async (req, res) => {
 
     if (code && schoolYear) {
       // ensure unique code and schoolYear combination
-      const exists = await Semester.findOne({ 
-        code, 
-        schoolYear, 
-        _id: { $ne: id } 
+      const exists = await Semester.findOne({
+        code,
+        schoolYear,
+        _id: { $ne: id },
       });
       if (exists)
         return res.status(409).json({

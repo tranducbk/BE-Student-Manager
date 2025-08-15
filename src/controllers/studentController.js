@@ -159,11 +159,12 @@ const addTuitionFee = async (req, res) => {
     }
 
     const student = user.student;
-    const { totalAmount, semester, content, status } = req.body;
+    const { totalAmount, semester, schoolYear, content, status } = req.body;
 
     const newTuitionFee = {
       totalAmount,
       semester,
+      schoolYear,
       content,
       status,
     };
