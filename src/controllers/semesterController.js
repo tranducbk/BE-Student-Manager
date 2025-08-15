@@ -45,7 +45,7 @@ const createSemester = async (req, res) => {
         .status(400)
         .json({ message: "Thiếu dữ liệu bắt buộc (code, schoolYear)" });
     }
-    const exists = await Semester.findOne({ code });
+    const exists = await Semester.findOne({ code, schoolYear });
     if (exists)
       return res.status(409).json({
         message: `Học kỳ ${exists.code} - ${exists.schoolYear} đã tồn tại. Vui lòng kiểm tra lại.`,
@@ -97,9 +97,13 @@ const updateSemester = async (req, res) => {
     if (schoolYear) update.schoolYear = schoolYear;
     update.updatedAt = new Date();
 
-    if (code) {
-      // ensure unique code
-      const exists = await Semester.findOne({ code, _id: { $ne: id } });
+    if (code && schoolYear) {
+      // ensure unique code and schoolYear combination
+      const exists = await Semester.findOne({ 
+        code, 
+        schoolYear, 
+        _id: { $ne: id } 
+      });
       if (exists)
         return res.status(409).json({
           message: `Học kỳ ${exists.code} - ${exists.schoolYear} đã tồn tại. Vui lòng kiểm tra lại.`,

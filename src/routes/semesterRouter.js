@@ -15,6 +15,7 @@ router.get("/", verifyToken, getAllSemesters);
 router.get("/:id", verifyToken, getSemesterById);
 
 // Tạo kỳ (Admin only)
+router.post("/", verifyToken, isAdmin, createSemester);
 router.post("/create", verifyToken, isAdmin, createSemester);
 
 // Cập nhật kỳ (Admin only)
