@@ -37,6 +37,7 @@ const getStudentGrades = async (req, res) => {
     return res.status(200).json({
       studentId: user.student.studentId,
       fullName: user.student.fullName,
+      positionParty: user.student.positionParty,
       semesterResults,
       yearlyResults: user.student.yearlyResults || [],
       summary: {
