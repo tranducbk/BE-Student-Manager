@@ -1773,7 +1773,15 @@ const updateNotification = async (req, res) => {
 };
 
 const getExcelCutRice = async (req, res) => {
-  const students = await Student.find({});
+  const unitQuery = req.query.unit;
+
+  let students = await Student.find({});
+
+  // Lọc theo đơn vị nếu có
+  if (unitQuery && unitQuery !== "all") {
+    const unitArray = unitQuery.split(",");
+    students = students.filter((student) => unitArray.includes(student.unit));
+  }
 
   const cutRices = [];
 
@@ -1793,6 +1801,19 @@ const getExcelCutRice = async (req, res) => {
         sunday: cutRice.sunday,
       });
     });
+  });
+
+  // Sắp xếp theo thứ tự từ L1 đến L6
+  cutRices.sort((a, b) => {
+    const unitOrder = {
+      "L1 - H5": 1,
+      "L2 - H5": 2,
+      "L3 - H5": 3,
+      "L4 - H5": 4,
+      "L5 - H5": 5,
+      "L6 - H5": 6,
+    };
+    return (unitOrder[a.unit] || 999) - (unitOrder[b.unit] || 999);
   });
 
   const workbook = new ExcelJS.Workbook();
@@ -1872,12 +1893,20 @@ const getExcelCutRice = async (req, res) => {
 
   // Định nghĩa các cột và merge cells cho header
   worksheet.mergeCells("A10:A11");
-  worksheet.getCell("A10").value = "Họ và tên";
+  worksheet.getCell("A10").value = "Đơn vị";
   worksheet.getCell("A10").alignment = {
     vertical: "middle",
     horizontal: "center",
   };
   worksheet.getCell("A10").font = { name: "Times New Roman", size: 13 };
+
+  worksheet.mergeCells("B10:B11");
+  worksheet.getCell("B10").value = "Họ và tên";
+  worksheet.getCell("B10").alignment = {
+    vertical: "middle",
+    horizontal: "center",
+  };
+  worksheet.getCell("B10").font = { name: "Times New Roman", size: 13 };
 
   const days = [
     "Thứ 2",
@@ -1891,33 +1920,37 @@ const getExcelCutRice = async (req, res) => {
   const meals = ["Sáng", "Trưa", "Chiều"];
 
   days.forEach((day, i) => {
-    worksheet.mergeCells(10, i * 3 + 2, 10, i * 3 + 4);
-    worksheet.getCell(10, i * 3 + 2).value = day;
-    worksheet.getCell(10, i * 3 + 2).alignment = {
+    worksheet.mergeCells(10, i * 3 + 3, 10, i * 3 + 5);
+    worksheet.getCell(10, i * 3 + 3).value = day;
+    worksheet.getCell(10, i * 3 + 3).alignment = {
       vertical: "middle",
       horizontal: "center",
     };
-    worksheet.getCell(10, i * 3 + 2).font = {
+    worksheet.getCell(10, i * 3 + 3).font = {
       name: "Times New Roman",
       size: 13,
     };
 
     meals.forEach((meal, j) => {
-      worksheet.getCell(11, i * 3 + 2 + j).value = meal;
-      worksheet.getCell(11, i * 3 + 2 + j).alignment = {
+      worksheet.getCell(11, i * 3 + 3 + j).value = meal;
+      worksheet.getCell(11, i * 3 + 3 + j).alignment = {
         vertical: "middle",
         horizontal: "center",
       };
-      worksheet.getCell(11, i * 3 + 2 + j).font = {
+      worksheet.getCell(11, i * 3 + 3 + j).font = {
         name: "Times New Roman",
         size: 13,
       };
     });
   });
 
-  // Thêm dữ liệu
+  // Thêm dữ liệu với logic gộp cột đơn vị
+  let currentUnit = "";
+  let unitStartRow = 12; // Bắt đầu từ hàng 12 (sau header)
+
   cutRices.forEach((record, index) => {
     const row = [
+      record.unit, // Cột đơn vị
       record.fullName,
       record.monday.breakfast ? "x" : "",
       record.monday.lunch ? "x" : "",
@@ -1941,7 +1974,24 @@ const getExcelCutRice = async (req, res) => {
       record.sunday.lunch ? "x" : "",
       record.sunday.dinner ? "x" : "",
     ];
+
     const addedRow = worksheet.addRow(row);
+    const currentRow = 12 + index; // Hàng hiện tại
+
+    // Logic gộp cột đơn vị
+    if (record.unit !== currentUnit) {
+      // Nếu đơn vị thay đổi và có đơn vị trước đó, gộp các ô
+      if (currentUnit !== "" && currentRow > unitStartRow) {
+        worksheet.mergeCells(`A${unitStartRow}:A${currentRow - 1}`);
+        worksheet.getCell(`A${unitStartRow}`).alignment = {
+          vertical: "middle",
+          horizontal: "center",
+        };
+      }
+      currentUnit = record.unit;
+      unitStartRow = currentRow;
+    }
+
     addedRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       cell.font = { name: "Times New Roman", size: 13 };
       // Căn giữa cho tất cả các ô dữ liệu
@@ -1952,8 +2002,20 @@ const getExcelCutRice = async (req, res) => {
     });
   });
 
+  // Gộp ô cho đơn vị cuối cùng
+  if (currentUnit !== "" && cutRices.length > 0) {
+    const lastRow = 12 + cutRices.length - 1;
+    if (lastRow >= unitStartRow) {
+      worksheet.mergeCells(`A${unitStartRow}:A${lastRow}`);
+      worksheet.getCell(`A${unitStartRow}`).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+    }
+  }
+
   // Định nghĩa border cho tất cả các ô trong bảng
-  const totalColumns = 24; // Số cột từ 'Họ và tên' tới 'Chủ nhật' (tăng 2 do merge cột Họ và tên)
+  const totalColumns = 25; // Số cột từ 'Đơn vị' tới 'Chủ nhật' (tăng 1 do thêm cột đơn vị)
   const totalRows = cutRices.length + 11; // Tổng số hàng bao gồm header và dữ liệu
 
   for (let i = 10; i <= totalRows; i++) {
@@ -1997,7 +2059,7 @@ const getExcelCutRice = async (req, res) => {
   );
   res.setHeader(
     "Content-Disposition",
-    "attachment; filename=danh_sach_cat_com_h5.xlsx"
+    "attachment; filename=Danh_sach_cat_com_he_hoc_vien_5.xlsx"
   );
 
   await workbook.xlsx.write(res);
@@ -2131,7 +2193,7 @@ const getPdfLearningResult = async (req, res) => {
 
       const tableHeaders = [
         "Họ và tên",
-        "Trường đại học",
+        "Trường Đại học",
         "GPA",
         "CPA",
         "TC tích lũy",
@@ -2297,15 +2359,27 @@ const getPdfLearningResult = async (req, res) => {
 const getPdfTuitionFee = async (req, res) => {
   try {
     const semesterQuery = req.query.semester;
-    const students = await Student.find();
+    const schoolYearQuery = req.query.schoolYear;
+    const unitQuery = req.query.unit; // Giữ nguyên endpoint nhưng đổi tên biến
+
+    // Populate university và class để lấy thông tin đầy đủ
+    const students = await Student.find().populate([
+      { path: "university", select: "universityName" },
+      { path: "class", select: "className" },
+    ]);
+
     let tuitionFees = [];
 
     students.forEach((student) => {
       student.tuitionFee.forEach((tuitionFee) => {
         tuitionFees.push({
           _id: tuitionFee._id,
+          studentId: student._id,
           fullName: student.fullName,
-          university: student.university,
+          university:
+            (student.university && student.university.universityName) || "",
+          unit: student.unit,
+          className: (student.class && student.class.className) || "",
           totalAmount: tuitionFee.totalAmount,
           semester: tuitionFee.semester,
           schoolYear: tuitionFee.schoolYear,
@@ -2315,15 +2389,88 @@ const getPdfTuitionFee = async (req, res) => {
       });
     });
 
-    if (semesterQuery) {
+    if (tuitionFees.length > 0) {
+      const uniqueSemesters = [
+        ...new Set(tuitionFees.map((tf) => tf.semester)),
+      ];
+      const uniqueSchoolYears = [
+        ...new Set(tuitionFees.map((tf) => tf.schoolYear)),
+      ];
+      const uniqueClasses = [...new Set(tuitionFees.map((tf) => tf.className))];
+      const uniqueUnits = [...new Set(tuitionFees.map((tf) => tf.unit))];
+    }
+
+    // Lọc theo học kỳ
+    if (semesterQuery && semesterQuery !== "all") {
+      const semesterArray = semesterQuery.split(",");
       tuitionFees = tuitionFees.filter((tuitionFee) => {
-        return tuitionFee.semester === semesterQuery;
+        return semesterArray.includes(tuitionFee.semester);
       });
     }
 
+    // Lọc theo năm học
+    if (schoolYearQuery && schoolYearQuery !== "all") {
+      const schoolYearArray = schoolYearQuery.split(",");
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        return schoolYearArray.includes(tuitionFee.schoolYear);
+      });
+    }
+
+    // Lọc theo đơn vị
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        // Kiểm tra cả className và unit với tên đơn vị được gửi trực tiếp
+        const isIncluded = unitArray.some(
+          (unitName) =>
+            tuitionFee.className === unitName ||
+            tuitionFee.unit === unitName ||
+            tuitionFee.className.includes(unitName) ||
+            tuitionFee.unit.includes(unitName)
+        );
+
+        if (!isIncluded) {
+          console.log(tuitionFee.unit);
+        }
+
+        return isIncluded;
+      });
+    }
+
+    // Sắp xếp theo thứ tự từ L1 đến L6
+    tuitionFees.sort((a, b) => {
+      const unitOrder = {
+        "L1 - H5": 1,
+        "L2 - H5": 2,
+        "L3 - H5": 3,
+        "L4 - H5": 4,
+        "L5 - H5": 5,
+        "L6 - H5": 6,
+      };
+
+      const aOrder = unitOrder[a.unit] || 999;
+      const bOrder = unitOrder[b.unit] || 999;
+
+      return aOrder - bOrder;
+    });
+
+    // Tính tổng học phí và phân loại theo trạng thái
     const totalAmountSum = tuitionFees.reduce((sum, tuitionFee) => {
       return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
     }, 0);
+
+    const paidAmountSum = tuitionFees
+      .filter((tuitionFee) => tuitionFee.status === "Đã thanh toán")
+      .reduce((sum, tuitionFee) => {
+        return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
+      }, 0);
+
+    const unpaidAmountSum = tuitionFees
+      .filter((tuitionFee) => tuitionFee.status === "Chưa thanh toán")
+      .reduce((sum, tuitionFee) => {
+        return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
+      }, 0);
 
     const doc = new PDFDocument({
       margins: {
@@ -2338,11 +2485,43 @@ const getPdfTuitionFee = async (req, res) => {
     doc.on("data", buffers.push.bind(buffers));
     doc.on("end", () => {
       let pdfData = Buffer.concat(buffers);
+
+      // Tạo tên file động dựa trên các tham số
+      let fileName = "Thong_ke_hoc_phi_he_hoc_vien_5";
+
+      // Thêm thông tin học kỳ
+      if (semesterQuery && semesterQuery !== "all") {
+        const semesterArray = semesterQuery.split(",");
+        fileName += `_${semesterArray.join("_")}`;
+      } else {
+        fileName += "_tat_ca_hoc_ky";
+      }
+
+      // Thêm thông tin năm học
+      if (schoolYearQuery && schoolYearQuery !== "all") {
+        const schoolYearArray = schoolYearQuery.split(",");
+        // Loại bỏ các năm học trùng lặp
+        const uniqueSchoolYears = [...new Set(schoolYearArray)];
+        fileName += `_${uniqueSchoolYears.join("_")}`;
+      } else {
+        fileName += "_tat_ca_nam_hoc";
+      }
+
+      // Thêm thông tin đơn vị
+      if (unitQuery && unitQuery !== "all") {
+        const unitArray = unitQuery.split(",");
+        fileName += `_${unitArray.join("_")}`;
+      } else {
+        fileName += "_tat_ca_don_vi";
+      }
+
+      fileName += ".pdf";
+
       res
         .writeHead(200, {
           "Content-Length": Buffer.byteLength(pdfData),
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment;filename=Thong_ke_hoc_phi_he5_hoc_ky_${semesterQuery}.pdf`,
+          "Content-Disposition": `attachment;filename=${fileName}`,
         })
         .end(pdfData);
     });
@@ -2360,15 +2539,17 @@ const getPdfTuitionFee = async (req, res) => {
     );
     doc.registerFont("Roboto-LightItalic", fontPathItalic);
 
-    const tableHeaderWidths = [100, 95, 145, 60, 60];
-    const tableStartX = 3.5 * 28.35;
+    const tableHeaderWidths = [70, 90, 85, 130, 60, 60];
+    const totalTableWidth = tableHeaderWidths.reduce((a, b) => a + b, 0);
+    const pageWidth = doc.page.width;
+    const tableStartX = (pageWidth - totalTableWidth) / 2;
 
     // Add initial header
     const addHeader = () => {
       doc
-        .font("Roboto-Regular")
+        .font("Roboto-Bold")
         .fontSize(13)
-        .text("HỌC VIỆN KTQS", {
+        .text("HỌC VIỆN KHOA HỌC QUÂN SỰ", {
           align: "left",
           continued: true,
         })
@@ -2381,7 +2562,7 @@ const getPdfTuitionFee = async (req, res) => {
       doc
         .font("Roboto-Bold")
         .fontSize(13)
-        .text(" HỆ HỌC VIÊN 5", {
+        .text(" HỆ HỌC VIÊN 5", 150, 90, {
           align: "left",
           continued: true,
         })
@@ -2390,41 +2571,135 @@ const getPdfTuitionFee = async (req, res) => {
         });
 
       doc.moveDown(1);
+
+      // Lấy ngày tháng năm hiện tại
+      const now = new Date();
+      const day = now.getDate();
+      const month = now.getMonth() + 1; // getMonth() trả về 0-11
+      const year = now.getFullYear();
+
       doc
         .font("Roboto-LightItalic")
         .fontSize(13)
-        .text("Hà Nội, ngày ... tháng ... năm 20...", {
+        .text(`Hà Nội, ngày ${day} tháng ${month} năm ${year}`, {
           align: "right",
         });
 
       doc.moveDown(2);
-      doc.font("Roboto-Bold").fontSize(15).text("BÁO CÁO", { align: "center" });
-
-      doc.moveDown(0.5);
-      doc
-        .font("Roboto-Bold")
-        .fontSize(13)
-        .text("Thống kê học phí học kỳ " + semesterQuery, {
-          align: "center",
-        });
-
-      doc.moveDown(1.5);
-      doc.font("Roboto-LightItalic").fontSize(13).text("*Hệ học viên 5", {
-        align: "left",
+      doc.font("Roboto-Bold").fontSize(15).text("BÁO CÁO", 50, doc.y, {
+        align: "center",
       });
 
-      doc.moveDown(0.2);
+      doc.moveDown(0.5);
+
+      // Tạo tiêu đề phù hợp
+      let title = "Thống kê học phí";
+      let titleParts = [];
+
+      // Xử lý học kỳ và năm học thông minh
+      if (
+        semesterQuery &&
+        semesterQuery !== "all" &&
+        schoolYearQuery &&
+        schoolYearQuery !== "all"
+      ) {
+        const semesterArray = semesterQuery.split(",");
+        const schoolYearArray = schoolYearQuery.split(",");
+
+        // Kiểm tra xem có cùng năm học không
+        const uniqueSchoolYears = [...new Set(schoolYearArray)];
+
+        if (uniqueSchoolYears.length === 1) {
+          // Cùng năm học: "HK1,2 năm học 2024-2025"
+          titleParts.push(
+            `học kỳ ${semesterArray.join(",")} năm học ${uniqueSchoolYears[0]}`
+          );
+        } else {
+          // Khác năm học: "HK1 năm học 2024-2025, HK2 năm học 2025-2026"
+          const combined = semesterArray.map(
+            (semester, index) => `${semester} năm học ${schoolYearArray[index]}`
+          );
+          titleParts.push(`học kỳ ${combined.join(", ")}`);
+        }
+      } else {
+        // Xử lý riêng lẻ nếu chỉ có học kỳ hoặc chỉ có năm học
+        if (semesterQuery && semesterQuery !== "all") {
+          titleParts.push(`học kỳ ${semesterQuery}`);
+        }
+        if (schoolYearQuery && schoolYearQuery !== "all") {
+          titleParts.push(`năm học ${schoolYearQuery}`);
+        }
+      }
+
+      if (unitQuery && unitQuery !== "all") {
+        // Xử lý tên đơn vị trực tiếp cho tiêu đề
+        const unitArray = unitQuery.split(",");
+        titleParts.push(`đơn vị ${unitArray.join(", ")}`);
+      }
+
+      if (titleParts.length > 0) {
+        title += ` ${titleParts.join(", ")}`;
+      }
+
+      // Kiểm tra độ dài tiêu đề để điều chỉnh font size
+      const titleLength = title.length;
+      let fontSize = 13;
+      if (titleLength > 80) {
+        fontSize = 11;
+      } else if (titleLength > 60) {
+        fontSize = 12;
+      }
+
+      doc.font("Roboto-Bold").fontSize(fontSize).text(title, 50, doc.y, {
+        align: "center",
+      });
+
+      doc.moveDown(1.5);
       doc
         .font("Roboto-Bold")
-        .fontSize(13)
+        .fontSize(12)
         .text(
-          "1. Tổng số tiền học phí học kỳ " +
-            semesterQuery +
-            ": " +
+          "1. Tổng số tiền học phí: " +
             totalAmountSum.toLocaleString("vi-VN", {
               style: "currency",
               currency: "VND",
             }),
+          50,
+          doc.y,
+          {
+            align: "left",
+          }
+        );
+
+      doc.moveDown(0.5);
+      doc
+        .font("Roboto-Bold")
+        .fontSize(12)
+        .text(
+          "2. Cần thanh toán: " +
+            unpaidAmountSum.toLocaleString("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            }),
+          50,
+          doc.y,
+          {
+            align: "left",
+          }
+        );
+
+      doc.moveDown(0.5);
+      doc
+        .font("Roboto-Bold")
+        .fontSize(12)
+        .text(
+          "3. Đã thanh toán: " +
+            paidAmountSum.toLocaleString("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            }),
+          50,
+          doc.y,
           {
             align: "left",
           }
@@ -2435,8 +2710,9 @@ const getPdfTuitionFee = async (req, res) => {
       const tableTop = doc.y; // Define tableTop here
 
       const tableHeaders = [
+        "Đơn vị",
         "Họ và tên",
-        "Trường đại học",
+        "Trường Đại học",
         "Loại tiền phải đóng",
         "Số tiền(đ)",
         "Trạng thái",
@@ -2492,16 +2768,24 @@ const getPdfTuitionFee = async (req, res) => {
       doc.font("Roboto-Regular").fontSize(10);
       const rowHeight = 15;
       const tableTopY = doc.y + 8;
+
+      // Function format số tiền với dấu phẩy ngăn cách hàng nghìn
+      const formatCurrency = (amount) => {
+        if (!amount) return "";
+        return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      };
+
       results.slice(startIndex, startIndex + 16).forEach((result) => {
         const row = [
+          result.unit || "",
           result.fullName,
-          result.university.replace("Đại học ", "").trim(),
-          result.content
+          (result.university || "").replace("Đại học ", "").trim(),
+          (result.content || "")
             .replace("Tổng ", "")
             .replace("học kỳ", "HK")
             .replace("học phí", "HP"),
-          result.totalAmount,
-          result.status,
+          formatCurrency(result.totalAmount) || "",
+          result.status || "",
         ];
 
         const rowTop = doc.y + rowHeight;
@@ -2581,7 +2865,7 @@ const getPdfTuitionFee = async (req, res) => {
       doc
         .font("Roboto-Regular")
         .fontSize(12)
-        .text("Nguyễn Văn Minh", signatureX, doc.y, { align: "center" });
+        .text("Bùi Đình Thế", signatureX, doc.y, { align: "center" });
     };
 
     addSignature();
@@ -3297,6 +3581,15 @@ const getAllStudentsGrades = async (req, res) => {
             subjects: result.subjects || [],
             totalCredits: result.totalCredits || 0,
             averageGrade10: result.averageGrade10?.toFixed(2) || "0.00",
+            cumulativeGrade10FromCpa4: (() => {
+              const cpa4 = parseFloat(result.cumulativeGrade4) || 0;
+              if (cpa4 < 2.0) return "0.00";
+              if (cpa4 < 2.5)
+                return Math.min(10.0, 3.0 * cpa4 - 0.5).toFixed(2);
+              if (cpa4 < 3.2)
+                return Math.min(10.0, 1.42 * cpa4 + 3.45).toFixed(2);
+              return Math.min(10.0, 2.5 * cpa4 + 0.0).toFixed(2);
+            })(),
           };
 
           console.log(

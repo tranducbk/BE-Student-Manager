@@ -19,6 +19,21 @@ const getStudentGrades = async (req, res) => {
       gradeHelper.updateCumulativeGrades(semesterResults);
     }
 
+    const cumulativeGrade4 =
+      gradeHelper.calculateCumulativeGrade4(semesterResults);
+    const cumulativeGrade10 =
+      gradeHelper.calculateCumulativeGrade10(semesterResults);
+
+    // Tính CPA hệ 10 từ CPA hệ 4
+    const cumulativeGrade10FromCpa4 = (() => {
+      if (cumulativeGrade4 < 2.0) return 0.0;
+      if (cumulativeGrade4 < 2.5)
+        return Math.min(10.0, 3.0 * cumulativeGrade4 - 0.5);
+      if (cumulativeGrade4 < 3.2)
+        return Math.min(10.0, 1.42 * cumulativeGrade4 + 3.45);
+      return Math.min(10.0, 2.5 * cumulativeGrade4 + 0.0);
+    })();
+
     return res.status(200).json({
       studentId: user.student.studentId,
       fullName: user.student.fullName,
@@ -26,10 +41,9 @@ const getStudentGrades = async (req, res) => {
       summary: {
         totalSemesters: semesterResults.length,
         totalCredits: gradeHelper.calculateCumulativeCredits(semesterResults),
-        cumulativeGrade4:
-          gradeHelper.calculateCumulativeGrade4(semesterResults),
-        cumulativeGrade10:
-          gradeHelper.calculateCumulativeGrade10(semesterResults),
+        cumulativeGrade4: cumulativeGrade4,
+        cumulativeGrade10: cumulativeGrade10,
+        cumulativeGrade10FromCpa4: cumulativeGrade10FromCpa4,
       },
     });
   } catch (error) {
@@ -345,6 +359,45 @@ const deleteSemesterGrades = async (req, res) => {
   }
 };
 
+// Xóa kết quả học tập theo ID (để tương thích với frontend cũ)
+const deleteSemesterGradesById = async (req, res) => {
+  try {
+    const { userId, learnId } = req.params;
+
+    const user = await User.findById(userId).populate("student");
+    if (!user || !user.student) {
+      return res.status(404).json({ message: "Không tìm thấy sinh viên" });
+    }
+
+    // Tìm và xóa học kỳ theo _id
+    const semesterIndex = user.student.semesterResults.findIndex(
+      (result) => result._id.toString() === learnId
+    );
+
+    if (semesterIndex === -1) {
+      return res.status(404).json({
+        message: "Không tìm thấy kết quả học tập",
+      });
+    }
+
+    user.student.semesterResults.splice(semesterIndex, 1);
+
+    // Cập nhật điểm tích lũy cho tất cả học kỳ còn lại
+    if (user.student.semesterResults.length > 0) {
+      gradeHelper.updateCumulativeGrades(user.student.semesterResults);
+    }
+
+    await user.student.save();
+
+    return res.status(200).json({
+      message: "Xóa kết quả học tập thành công",
+    });
+  } catch (error) {
+    console.error("Error deleting semester grades by ID:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 // Lấy thông tin điểm
 const getGradeInfo = async (req, res) => {
   try {
@@ -452,6 +505,7 @@ module.exports = {
   addSemesterGrades,
   updateSemesterGrades,
   deleteSemesterGrades,
+  deleteSemesterGradesById,
   getGradeInfo,
   convertGrade,
   calculateAverage,

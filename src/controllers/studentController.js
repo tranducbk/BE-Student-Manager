@@ -542,9 +542,24 @@ const deleteLearningInformation = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sinh viên" });
     }
 
-    student.learningInformation = student.learningInformation.filter(
-      (learn) => learn._id.toString() !== learnId
+    // Tìm và xóa trong semesterResults thay vì learningInformation
+    const semesterIndex = student.semesterResults.findIndex(
+      (result) => result._id.toString() === learnId
     );
+
+    if (semesterIndex === -1) {
+      return res.status(404).json({
+        message: "Không tìm thấy kết quả học tập",
+      });
+    }
+
+    student.semesterResults.splice(semesterIndex, 1);
+
+    // Cập nhật điểm tích lũy cho tất cả học kỳ còn lại
+    if (student.semesterResults.length > 0) {
+      const gradeHelper = require("../helpers/gradeHelper");
+      gradeHelper.updateCumulativeGrades(student.semesterResults);
+    }
 
     await student.save();
 
@@ -552,6 +567,7 @@ const deleteLearningInformation = async (req, res) => {
       .status(200)
       .json({ message: "Learning Information đã được xóa thành công" });
   } catch (error) {
+    console.error("Error deleting learning information:", error);
     return res.status(500).json("Lỗi server");
   }
 };

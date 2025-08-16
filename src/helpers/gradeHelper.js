@@ -258,8 +258,7 @@ const updateCumulativeGrades = (allSemesterResults) => {
   const cumulativeCredits = calculateCumulativeCredits(allSemesterResults);
   const cumulativeGrade4 = calculateCumulativeGrade4(allSemesterResults);
   const cumulativeGrade10 = calculateCumulativeGrade10(allSemesterResults);
-
-  allSemesterResults.forEach((semester) => {
+  const cumulativeGrade10FromCpa4 = allSemesterResults.forEach((semester) => {
     semester.cumulativeCredits = cumulativeCredits;
     semester.cumulativeGrade4 = cumulativeGrade4;
     semester.cumulativeGrade10 = cumulativeGrade10;
