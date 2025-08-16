@@ -64,6 +64,22 @@ const semesterResultSchema = new mongoose.Schema({
   cumulativeCredits: { type: Number, default: 0 }, // Tổng tín chỉ tích lũy
   cumulativeGrade4: { type: Number, default: 0 }, // Điểm tích lũy hệ 4
   cumulativeGrade10: { type: Number, default: 0 }, // Điểm tích lũy hệ 10
+
+  // Xếp loại đảng viên cho kỳ này
+  partyRating: {
+    decisionNumber: { type: String }, // Số quyết định
+    rating: {
+      type: String,
+      enum: ["HTXSNV", "HTTNV", "HTNV", "KHTNV"], // Hoàn thành xuất sắc nhiệm vụ, Hoàn thành tốt nhiệm vụ, Hoàn thành nhiệm vụ, Không hoàn thành nhiệm vụ
+    },
+  },
+
+  // Xếp loại rèn luyện cho kỳ này
+  trainingRating: {
+    type: String,
+    enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
+  },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -132,33 +148,6 @@ const foreignRelationSchema = new mongoose.Schema({
   country: { type: String, required: true }, // Quốc gia (Liên bang Nga, Ý...)
   reason: { type: String, required: true }, // Lý do (định cư, du học, công tác...)
   nationality: { type: String, required: true }, // Quốc tịch
-});
-
-// Schema cho xếp loại đảng viên theo năm
-const partyRatingSchema = new mongoose.Schema({
-  decisionNumber: { type: String, required: true }, // Số quyết định
-  decisionDate: { type: Date, required: true }, // Ngày quyết định
-  year: { type: Number, required: true }, // Năm xếp loại
-  rating: {
-    type: String,
-    enum: ["HTXSNV", "HTTNV", "HTNV", "KHTNV"], // Hoàn thành xuất sắc nhiệm vụ, Hoàn thành tốt nhiệm vụ, Hoàn thành nhiệm vụ, Không hoàn thành nhiệm vụ
-    required: true,
-  },
-});
-
-// Schema cho xếp loại rèn luyện theo năm
-const trainingRatingSchema = new mongoose.Schema({
-  year: { type: Number, required: true }, // Năm học
-  semester1: {
-    type: String,
-    enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
-    required: true,
-  }, // Xếp loại học kỳ 1
-  semester2: {
-    type: String,
-    enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
-    required: true,
-  }, // Xếp loại học kỳ 2
 });
 
 const studentSchema = mongoose.model(
@@ -234,10 +223,6 @@ const studentSchema = mongoose.model(
     familyMembers: [familyMemberSchema],
     // Mối quan hệ có yếu tố nước ngoài
     foreignRelations: [foreignRelationSchema],
-    // Xếp loại đảng viên theo năm
-    partyRatings: [partyRatingSchema],
-    // Xếp loại rèn luyện theo năm
-    trainingRatings: [trainingRatingSchema],
   })
 );
 

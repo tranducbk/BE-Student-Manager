@@ -3570,6 +3570,7 @@ const getAllStudentsGrades = async (req, res) => {
             university: student.university?.universityName || "",
             className: student.class?.className || "",
             unit: student.unit || "",
+            positionParty: student.positionParty || "Không",
             semester: result.semester,
             schoolYear: result.schoolYear,
             GPA: result.averageGrade4?.toFixed(2) || "0.00",
@@ -3590,6 +3591,8 @@ const getAllStudentsGrades = async (req, res) => {
                 return Math.min(10.0, 1.42 * cpa4 + 3.45).toFixed(2);
               return Math.min(10.0, 2.5 * cpa4 + 0.0).toFixed(2);
             })(),
+            // Thêm thông tin xếp loại từ semesterResults
+            semesterResults: [result], // Để frontend có thể truy cập partyRating và trainingRating
           };
 
           console.log(
@@ -3610,6 +3613,1070 @@ const getAllStudentsGrades = async (req, res) => {
   } catch (error) {
     console.error("Error in getAllStudentsGrades:", error);
     return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+const getPdfCutRice = async (req, res) => {
+  try {
+    const unitQuery = req.query.unit;
+
+    let students = await Student.find({}).populate([
+      { path: "university", select: "universityName" },
+      { path: "class", select: "className" },
+    ]);
+
+    // Lấy dữ liệu lịch học từ API
+    const TimeTable = require("../models/time_table");
+    let timeTables = await TimeTable.find({}).populate("studentId");
+
+    // Tạo map để lưu lịch học theo học viên
+    const timeTableMap = new Map();
+
+    timeTables.forEach((timeTable) => {
+      if (
+        timeTable.studentId &&
+        timeTable.schedules &&
+        timeTable.schedules.length > 0
+      ) {
+        const studentId = timeTable.studentId._id.toString();
+        if (!timeTableMap.has(studentId)) {
+          timeTableMap.set(studentId, {
+            monday: [],
+            tuesday: [],
+            wednesday: [],
+            thursday: [],
+            friday: [],
+            saturday: [],
+            sunday: [],
+          });
+        }
+
+        const studentSchedule = timeTableMap.get(studentId);
+        timeTable.schedules.forEach((schedule) => {
+          const dayKey = schedule.day.toLowerCase();
+          if (studentSchedule[dayKey]) {
+            studentSchedule[dayKey].push({
+              subject: schedule.subject,
+              time: schedule.time,
+              classroom: schedule.classroom,
+              schoolWeek: schedule.schoolWeek,
+            });
+          }
+        });
+      }
+    });
+
+    // Lọc theo đơn vị nếu có
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+      students = students.filter((student) => unitArray.includes(student.unit));
+    }
+
+    // Sắp xếp theo thứ tự từ L1 đến L6
+    students.sort((a, b) => {
+      const unitOrder = {
+        "L1 - H5": 1,
+        "L2 - H5": 2,
+        "L3 - H5": 3,
+        "L4 - H5": 4,
+        "L5 - H5": 5,
+        "L6 - H5": 6,
+      };
+      return (unitOrder[a.unit] || 999) - (unitOrder[b.unit] || 999);
+    });
+
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape", // Khổ ngang
+      margins: {
+        top: 2 * 28.35,
+        left: 2 * 28.35,
+        right: 2 * 28.35,
+        bottom: 2 * 28.35,
+      },
+    });
+
+    let buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => {
+      let pdfData = Buffer.concat(buffers);
+
+      // Tạo tên file động
+      let fileName = "Lich_cat_com_va_lich_hoc_he_hoc_vien_5";
+      if (unitQuery && unitQuery !== "all") {
+        const unitArray = unitQuery.split(",");
+        fileName += `_${unitArray.join("_")}`;
+      } else {
+        fileName += "_tat_ca_don_vi";
+      }
+      fileName += ".pdf";
+
+      res
+        .writeHead(200, {
+          "Content-Length": Buffer.byteLength(pdfData),
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment;filename=${fileName}`,
+        })
+        .end(pdfData);
+    });
+
+    // Đăng ký font
+    const fontPathBold = path.join(__dirname, "fonts", "Roboto-Bold.ttf");
+    doc.registerFont("Roboto-Bold", fontPathBold);
+
+    const fontPathRegular = path.join(__dirname, "fonts", "Roboto-Regular.ttf");
+    doc.registerFont("Roboto-Regular", fontPathRegular);
+
+    const fontPathItalic = path.join(
+      __dirname,
+      "fonts",
+      "Roboto-LightItalic.ttf"
+    );
+    doc.registerFont("Roboto-LightItalic", fontPathItalic);
+
+    // Header
+    doc.font("Roboto-Bold").fontSize(14).text("HỌC VIỆN KHOA HỌC QUÂN SỰ", {
+      align: "center",
+    });
+
+    doc.moveDown(0.5);
+    doc.font("Roboto-Bold").fontSize(14).text("HỆ HỌC VIÊN 5", {
+      align: "center",
+    });
+
+    doc.moveDown(0.5);
+    doc.font("Roboto-Bold").fontSize(16).text("LỊCH CẮT CƠM VÀ LỊCH HỌC", {
+      align: "center",
+    });
+
+    // Ngày tháng
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    doc.moveDown(0.5);
+    doc
+      .font("Roboto-LightItalic")
+      .fontSize(12)
+      .text(`Hà Nội, ngày ${day} tháng ${month} năm ${year}`, {
+        align: "right",
+      });
+
+    doc.moveDown(1);
+
+    // Định nghĩa cột cho bảng
+    const tableHeaders = [
+      "Đơn vị",
+      "STT",
+      "Họ tên",
+      "Thứ",
+      "Lịch học",
+      "Cắt cơm",
+    ];
+
+    const columnWidths = [60, 30, 120, 40, 80, 90];
+    const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+    const startX = (doc.page.width - totalWidth) / 2;
+
+    // Vẽ header bảng với sub-headers
+    let currentX = startX;
+    const headerY = doc.y;
+    doc.font("Roboto-Bold").fontSize(8);
+
+    // Vẽ border header chính
+    doc.rect(startX, headerY, totalWidth, 40).stroke();
+
+    // Vẽ header chính
+    tableHeaders.forEach((header, i) => {
+      doc.text(header, currentX, headerY + 5, {
+        width: columnWidths[i],
+        align: "center",
+      });
+
+      // Vẽ đường kẻ dọc cho header
+      if (i > 0) {
+        doc
+          .moveTo(currentX, headerY)
+          .lineTo(currentX, headerY + 40)
+          .stroke();
+      }
+      currentX += columnWidths[i];
+    });
+
+    // Vẽ sub-headers cho Lịch học và Cắt cơm
+    currentX = startX;
+
+    // Đơn vị, STT, Họ tên, Thứ - không có sub-header
+    currentX +=
+      columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3];
+
+    // Sub-header cho Lịch học
+    const lichHocX = currentX;
+    doc.text("môn", lichHocX, headerY + 25, {
+      width: columnWidths[4] / 2,
+      align: "center",
+    });
+    doc.text("t.gian học", lichHocX + columnWidths[4] / 2, headerY + 25, {
+      width: columnWidths[4] / 2,
+      align: "center",
+    });
+
+    // Vẽ đường kẻ dọc giữa sub-headers
+    doc
+      .moveTo(lichHocX + columnWidths[4] / 2, headerY + 20)
+      .lineTo(lichHocX + columnWidths[4] / 2, headerY + 40)
+      .stroke();
+
+    currentX += columnWidths[4];
+
+    // Sub-header cho Cắt cơm
+    const catComX = currentX;
+    doc.text("sáng", catComX, headerY + 25, {
+      width: columnWidths[5] / 3,
+      align: "center",
+    });
+    doc.text("trưa", catComX + columnWidths[5] / 3, headerY + 25, {
+      width: columnWidths[5] / 3,
+      align: "center",
+    });
+    doc.text("Tối", catComX + (2 * columnWidths[5]) / 3, headerY + 25, {
+      width: columnWidths[5] / 3,
+      align: "center",
+    });
+
+    // Vẽ đường kẻ dọc giữa sub-headers
+    doc
+      .moveTo(catComX + columnWidths[5] / 3, headerY + 20)
+      .lineTo(catComX + columnWidths[5] / 3, headerY + 40)
+      .stroke();
+    doc
+      .moveTo(catComX + (2 * columnWidths[5]) / 3, headerY + 20)
+      .lineTo(catComX + (2 * columnWidths[5]) / 3, headerY + 40)
+      .stroke();
+
+    // Không moveDown để header liền với bảng
+    const dataStartY = headerY + 40;
+
+    // Vẽ dữ liệu
+    let currentUnit = "";
+    let unitStartRow = 0;
+    let rowCount = 0;
+    const rowHeight = 20;
+
+    // Tạo dữ liệu cho từng học viên với mỗi thứ ở dòng riêng
+    const allRows = [];
+    let dataCurrentUnit = "";
+    let unitStudentIndex = 0;
+
+    students.forEach((student, studentIndex) => {
+      const studentTimeTable = timeTableMap.get(student._id.toString()) || {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: [],
+        saturday: [],
+        sunday: [],
+      };
+
+      const dayKeys = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ];
+      const dayNumbers = ["2", "3", "4", "5", "6", "7", "CN"];
+
+      // Reset STT khi đơn vị thay đổi
+      if (student.unit !== dataCurrentUnit) {
+        dataCurrentUnit = student.unit;
+        unitStudentIndex = 0;
+      }
+      unitStudentIndex++;
+
+      // Tạo một dòng cho mỗi thứ có lịch học hoặc cắt cơm
+      dayKeys.forEach((dayKey, dayIndex) => {
+        const daySchedule = studentTimeTable[dayKey] || [];
+        const dayData = student.cutRice[0]?.[dayKey] || {};
+
+        // Chỉ tạo dòng nếu có lịch học hoặc cắt cơm
+        if (
+          daySchedule.length > 0 ||
+          dayData.breakfast ||
+          dayData.lunch ||
+          dayData.dinner
+        ) {
+          allRows.push({
+            student,
+            studentIndex: unitStudentIndex, // Sử dụng STT trong đơn vị
+            dayKey,
+            dayNumber: dayNumbers[dayIndex],
+            daySchedule,
+            dayData,
+            isFirstRow:
+              allRows.length === 0 ||
+              allRows[allRows.length - 1].student._id.toString() !==
+                student._id.toString(),
+          });
+        }
+      });
+    });
+
+    // Vẽ từng dòng
+    allRows.forEach((rowData, rowIndex) => {
+      const {
+        student,
+        studentIndex,
+        dayKey,
+        dayNumber,
+        daySchedule,
+        dayData,
+        isFirstRow,
+      } = rowData;
+
+      currentX = startX;
+      const currentRowY = dataStartY + rowCount * rowHeight;
+      doc.font("Roboto-Regular").fontSize(7);
+
+      // Đơn vị - chỉ hiển thị ở dòng đầu tiên của học viên
+      if (isFirstRow) {
+        doc.text(student.unit, currentX, currentRowY + 5, {
+          width: columnWidths[0],
+          align: "center",
+        });
+      }
+      currentX += columnWidths[0];
+
+      // STT - chỉ hiển thị ở dòng đầu tiên của học viên
+      if (isFirstRow) {
+        doc.text((studentIndex + 1).toString(), currentX, currentRowY + 5, {
+          width: columnWidths[1],
+          align: "center",
+        });
+      }
+      currentX += columnWidths[1];
+
+      // Họ tên - chỉ hiển thị ở dòng đầu tiên của học viên
+      if (isFirstRow) {
+        const universityName = student.university?.universityName || "";
+        const major = student.major || "";
+        const travelTime = student.organization?.travelTime || "";
+
+        let fullNameContent = `${
+          student.fullName
+        }\nTrường: ${universityName.replace(
+          "Đại học ",
+          ""
+        )}\nNgành: ${major}\nThời gian di chuyển: ${travelTime}`;
+
+        doc.text(fullNameContent, currentX, currentRowY + 5, {
+          width: columnWidths[2],
+          align: "left",
+        });
+      }
+      currentX += columnWidths[2];
+
+      // Thứ - hiển thị số thứ tự ngày
+      doc.text(dayNumber, currentX, currentRowY + 5, {
+        width: columnWidths[3],
+        align: "center",
+      });
+      currentX += columnWidths[3];
+
+      // Lịch học (môn và thời gian)
+      let subjectContent = "";
+      let timeContent = "";
+
+      daySchedule.forEach((schedule, subIndex) => {
+        if (subjectContent) subjectContent += "\n";
+        if (timeContent) timeContent += "\n";
+        subjectContent += schedule.subject;
+        timeContent += schedule.time;
+      });
+
+      // Vẽ môn học
+      doc.text(subjectContent, currentX, currentRowY + 5, {
+        width: columnWidths[4] / 2,
+        align: "center",
+      });
+
+      // Vẽ thời gian học
+      doc.text(timeContent, currentX + columnWidths[4] / 2, currentRowY + 5, {
+        width: columnWidths[4] / 2,
+        align: "center",
+      });
+      currentX += columnWidths[4];
+
+      // Cắt cơm (sáng, trưa, tối)
+      let sangContent = dayData.breakfast ? "X" : "";
+      let truaContent = dayData.lunch ? "X" : "";
+      let toiContent = dayData.dinner ? "X" : "";
+
+      // Vẽ sáng
+      doc.text(sangContent, currentX, currentRowY + 5, {
+        width: columnWidths[5] / 3,
+        align: "center",
+      });
+
+      // Vẽ trưa
+      doc.text(truaContent, currentX + columnWidths[5] / 3, currentRowY + 5, {
+        width: columnWidths[5] / 3,
+        align: "center",
+      });
+
+      // Vẽ tối
+      doc.text(
+        toiContent,
+        currentX + (2 * columnWidths[5]) / 3,
+        currentRowY + 5,
+        {
+          width: columnWidths[5] / 3,
+          align: "center",
+        }
+      );
+      currentX += columnWidths[5];
+
+      // Vẽ border cho từng hàng
+      doc.rect(startX, currentRowY, totalWidth, rowHeight).stroke();
+
+      // Vẽ đường kẻ dọc cho từng hàng
+      currentX = startX;
+      columnWidths.forEach((width) => {
+        doc
+          .moveTo(currentX, currentRowY)
+          .lineTo(currentX, currentRowY + rowHeight)
+          .stroke();
+        currentX += width;
+      });
+
+      // Vẽ đường kẻ dọc cho sub-headers
+      const lichHocXRow =
+        startX +
+        columnWidths[0] +
+        columnWidths[1] +
+        columnWidths[2] +
+        columnWidths[3];
+      const catComXRow = lichHocXRow + columnWidths[4];
+
+      // Đường kẻ dọc cho Lịch học
+      doc
+        .moveTo(lichHocXRow + columnWidths[4] / 2, currentRowY)
+        .lineTo(lichHocXRow + columnWidths[4] / 2, currentRowY + rowHeight)
+        .stroke();
+
+      // Đường kẻ dọc cho Cắt cơm
+      doc
+        .moveTo(catComXRow + columnWidths[5] / 3, currentRowY)
+        .lineTo(catComXRow + columnWidths[5] / 3, currentRowY + rowHeight)
+        .stroke();
+      doc
+        .moveTo(catComXRow + (2 * columnWidths[5]) / 3, currentRowY)
+        .lineTo(catComXRow + (2 * columnWidths[5]) / 3, currentRowY + rowHeight)
+        .stroke();
+
+      rowCount++;
+
+      // Kiểm tra nếu cần thêm trang mới
+      if (currentRowY + rowHeight > doc.page.height - 100) {
+        doc.addPage();
+        doc.moveDown(1);
+        rowCount = 0;
+      }
+    });
+
+    // Xử lý merge cells cho đơn vị, STT, và Họ tên
+    let mergeCurrentUnit = "";
+    let mergeUnitStartRow = 0;
+    let currentRowCount = 0;
+
+    allRows.forEach((rowData, rowIndex) => {
+      const { student } = rowData;
+
+      if (student.unit !== mergeCurrentUnit) {
+        if (mergeCurrentUnit !== "" && currentRowCount > mergeUnitStartRow) {
+          // Merge cells cho đơn vị trước đó
+          const unitHeight = (currentRowCount - mergeUnitStartRow) * rowHeight;
+          const mergeY = dataStartY + mergeUnitStartRow * rowHeight;
+          doc.rect(startX, mergeY, columnWidths[0], unitHeight).stroke();
+        }
+        mergeCurrentUnit = student.unit;
+        mergeUnitStartRow = currentRowCount;
+      }
+      currentRowCount++;
+    });
+
+    // Merge cells cho đơn vị cuối cùng
+    if (mergeCurrentUnit !== "" && currentRowCount > mergeUnitStartRow) {
+      const unitHeight = (currentRowCount - mergeUnitStartRow) * rowHeight;
+      const mergeY = dataStartY + mergeUnitStartRow * rowHeight;
+      doc.rect(startX, mergeY, columnWidths[0], unitHeight).stroke();
+    }
+
+    // Merge cells cho sub-headers
+    const lichHocXFinal =
+      startX +
+      columnWidths[0] +
+      columnWidths[1] +
+      columnWidths[2] +
+      columnWidths[3];
+    const catComXFinal = lichHocXFinal + columnWidths[4];
+
+    // Vẽ đường kẻ dọc cho Lịch học
+    doc
+      .moveTo(lichHocXFinal + columnWidths[4] / 2, dataStartY)
+      .lineTo(
+        lichHocXFinal + columnWidths[4] / 2,
+        dataStartY + rowCount * rowHeight
+      )
+      .stroke();
+
+    // Vẽ đường kẻ dọc cho Cắt cơm
+    doc
+      .moveTo(catComXFinal + columnWidths[5] / 3, dataStartY)
+      .lineTo(
+        catComXFinal + columnWidths[5] / 3,
+        dataStartY + rowCount * rowHeight
+      )
+      .stroke();
+    doc
+      .moveTo(catComXFinal + (2 * columnWidths[5]) / 3, dataStartY)
+      .lineTo(
+        catComXFinal + (2 * columnWidths[5]) / 3,
+        dataStartY + rowCount * rowHeight
+      )
+      .stroke();
+
+    // Chữ ký
+    doc.moveDown(2);
+    const pageWidth = doc.page.width;
+    const signatureX = pageWidth - 2.5 * 28.35 - 100;
+    const signatureY = doc.y;
+
+    doc
+      .font("Roboto-Bold")
+      .fontSize(12)
+      .text("HỆ TRƯỞNG", signatureX, signatureY, { align: "center" });
+
+    doc.moveDown(3);
+    doc
+      .font("Roboto-Regular")
+      .fontSize(12)
+      .text("Bùi Đình Thế", signatureX, doc.y, { align: "center" });
+
+    doc.end();
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+};
+
+const getExcelCutRiceWithSchedule = async (req, res) => {
+  try {
+    const { unit } = req.query;
+
+    // Lấy dữ liệu cắt cơm
+    const Student = require("../models/student");
+    let query = {};
+    if (unit && unit !== "all") {
+      query.unit = unit;
+    }
+
+    console.log("=== DEBUG: Query parameters ===");
+    console.log("Unit filter:", unit);
+    console.log("Query object:", query);
+
+    const students = await Student.find(query).populate("university");
+    console.log("=== DEBUG: Students found ===");
+    console.log("Total students found:", students.length);
+    console.log(
+      "Students:",
+      students.map((s) => ({
+        id: s._id,
+        name: s.fullName,
+        unit: s.unit,
+        hasCutRice: s.cutRice && s.cutRice.length > 0,
+        cutRiceData: s.cutRice,
+      }))
+    );
+
+    // Lọc students có dữ liệu cắt cơm
+    const studentsWithCutRice = students.filter(
+      (student) => student.cutRice && student.cutRice.length > 0
+    );
+
+    console.log("=== DEBUG: Students with cut rice ===");
+    console.log("Students with cut rice:", studentsWithCutRice.length);
+    console.log("=== DEBUG: Final data processing ===");
+    console.log("Total rows to generate:", allRows.length);
+    console.log("=== DEBUG: Sample rows ===");
+    allRows.slice(0, 3).forEach((row, index) => {
+      console.log(`Row ${index + 1}:`, {
+        studentName: row.student.fullName,
+        unit: row.student.unit,
+        day: row.dayNumber,
+        dayKey: row.dayKey,
+        hasSchedule: row.daySchedule.length > 0,
+        scheduleCount: row.daySchedule.length,
+        cutRice: {
+          breakfast: row.dayData.breakfast,
+          lunch: row.dayData.lunch,
+          dinner: row.dayData.dinner,
+        },
+      });
+    });
+    console.log(
+      "Students with cut rice details:",
+      studentsWithCutRice.map((s) => ({
+        id: s._id,
+        name: s.fullName,
+        unit: s.unit,
+        cutRiceData: s.cutRice,
+        cutRiceSummary: s.cutRice?.[0]
+          ? {
+              monday: {
+                breakfast: s.cutRice[0].monday?.breakfast,
+                lunch: s.cutRice[0].monday?.lunch,
+                dinner: s.cutRice[0].monday?.dinner,
+              },
+              tuesday: {
+                breakfast: s.cutRice[0].tuesday?.breakfast,
+                lunch: s.cutRice[0].tuesday?.lunch,
+                dinner: s.cutRice[0].tuesday?.dinner,
+              },
+              wednesday: {
+                breakfast: s.cutRice[0].wednesday?.breakfast,
+                lunch: s.cutRice[0].wednesday?.lunch,
+                dinner: s.cutRice[0].wednesday?.dinner,
+              },
+              thursday: {
+                breakfast: s.cutRice[0].thursday?.breakfast,
+                lunch: s.cutRice[0].thursday?.lunch,
+                dinner: s.cutRice[0].thursday?.dinner,
+              },
+              friday: {
+                breakfast: s.cutRice[0].friday?.breakfast,
+                lunch: s.cutRice[0].friday?.lunch,
+                dinner: s.cutRice[0].friday?.dinner,
+              },
+              saturday: {
+                breakfast: s.cutRice[0].saturday?.breakfast,
+                lunch: s.cutRice[0].saturday?.lunch,
+                dinner: s.cutRice[0].saturday?.dinner,
+              },
+              sunday: {
+                breakfast: s.cutRice[0].sunday?.breakfast,
+                lunch: s.cutRice[0].sunday?.lunch,
+                dinner: s.cutRice[0].sunday?.dinner,
+              },
+            }
+          : null,
+      }))
+    );
+
+    if (!studentsWithCutRice || studentsWithCutRice.length === 0) {
+      console.log("=== DEBUG: No data found ===");
+      console.log("No students with cut rice data found");
+      return res.status(404).json({
+        message: unit
+          ? `Không tìm thấy dữ liệu cắt cơm cho đơn vị: ${unit}`
+          : "Không tìm thấy dữ liệu cắt cơm",
+      });
+    }
+
+    // Lấy dữ liệu lịch học từ API - chỉ lấy lịch học của students đã lọc
+    const TimeTable = require("../models/time_table");
+    const studentIds = studentsWithCutRice.map((student) => student._id);
+    let timeTables = await TimeTable.find({
+      studentId: { $in: studentIds },
+    }).populate("studentId");
+
+    console.log("=== DEBUG: TimeTable query ===");
+    console.log("Student IDs to find:", studentIds);
+    console.log("TimeTables found:", timeTables.length);
+
+    console.log("=== DEBUG: TimeTables details ===");
+    timeTables.forEach((tt, index) => {
+      console.log(`TimeTable ${index + 1}:`, {
+        studentId: tt.studentId?._id,
+        studentName: tt.studentId?.fullName,
+        schedulesCount: tt.schedules?.length || 0,
+        schedules: tt.schedules?.map((s) => ({
+          day: s.day,
+          subject: s.subject,
+          time: s.time,
+        })),
+      });
+    });
+
+    // Tạo map để lưu lịch học theo học viên
+    const timeTableMap = new Map();
+
+    timeTables.forEach((timeTable) => {
+      if (
+        timeTable.studentId &&
+        timeTable.schedules &&
+        timeTable.schedules.length > 0
+      ) {
+        const studentId = timeTable.studentId._id.toString();
+        if (!timeTableMap.has(studentId)) {
+          timeTableMap.set(studentId, {
+            monday: [],
+            tuesday: [],
+            wednesday: [],
+            thursday: [],
+            friday: [],
+            saturday: [],
+            sunday: [],
+          });
+        }
+        const studentSchedule = timeTableMap.get(studentId);
+        timeTable.schedules.forEach((schedule) => {
+          const dayKey = schedule.day.toLowerCase();
+          if (studentSchedule[dayKey]) {
+            studentSchedule[dayKey].push({
+              subject: schedule.subject,
+              time: schedule.time,
+              classroom: schedule.classroom,
+              schoolWeek: schedule.schoolWeek,
+            });
+          }
+        });
+      }
+    });
+
+    // Tạo dữ liệu cho từng học viên với mỗi thứ ở dòng riêng
+    const allRows = [];
+    let dataCurrentUnit = "";
+    let unitStudentIndex = 0;
+
+    studentsWithCutRice.forEach((student, studentIndex) => {
+      const studentTimeTable = timeTableMap.get(student._id.toString()) || {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: [],
+        saturday: [],
+        sunday: [],
+      };
+      const dayKeys = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ];
+      const dayNumbers = ["2", "3", "4", "5", "6", "7", "CN"];
+
+      // Reset STT khi đơn vị thay đổi
+      if (student.unit !== dataCurrentUnit) {
+        dataCurrentUnit = student.unit;
+        unitStudentIndex = 0;
+      }
+      unitStudentIndex++;
+
+      dayKeys.forEach((dayKey, dayIndex) => {
+        const daySchedule = studentTimeTable[dayKey] || [];
+        const dayData = student.cutRice[0]?.[dayKey] || {};
+
+        if (
+          daySchedule.length > 0 ||
+          dayData.breakfast ||
+          dayData.lunch ||
+          dayData.dinner
+        ) {
+          allRows.push({
+            student,
+            studentIndex: unitStudentIndex,
+            dayKey,
+            dayNumber: dayNumbers[dayIndex],
+            daySchedule,
+            dayData,
+            isFirstRow:
+              allRows.length === 0 ||
+              allRows[allRows.length - 1].student._id.toString() !==
+                student._id.toString(),
+          });
+        }
+      });
+    });
+
+    // Tạo workbook và worksheet
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Lịch cắt cơm và học tập");
+
+    // Thiết lập orientation landscape
+    worksheet.pageSetup.orientation = "landscape";
+    worksheet.pageSetup.fitToPage = true;
+    worksheet.pageSetup.fitToWidth = 1;
+    worksheet.pageSetup.fitToHeight = 0;
+
+    // Định nghĩa cột
+    worksheet.columns = [
+      { key: "unit", width: 15, header: "Đơn vị" },
+      { key: "stt", width: 8, header: "STT" },
+      { key: "fullName", width: 30, header: "Họ tên" },
+      { key: "day", width: 8, header: "Thứ" },
+      { key: "subject", width: 20, header: "Môn học" },
+      { key: "time", width: 15, header: "Thời gian" },
+      { key: "breakfast", width: 8, header: "Sáng" },
+      { key: "lunch", width: 8, header: "Trưa" },
+      { key: "dinner", width: 8, header: "Tối" },
+    ];
+
+    // Tạo header với merge cells
+    const headerRow1 = worksheet.addRow([
+      "Đơn vị",
+      "STT",
+      "Họ tên",
+      "Thứ",
+      "Lịch học",
+      "",
+      "Cắt cơm",
+      "",
+      "",
+    ]);
+    const headerRow2 = worksheet.addRow([
+      "",
+      "",
+      "",
+      "",
+      "Môn học",
+      "Thời gian",
+      "Sáng",
+      "Trưa",
+      "Tối",
+    ]);
+
+    // Merge cells cho header
+    worksheet.mergeCells("A1:A2"); // Đơn vị
+    worksheet.mergeCells("B1:B2"); // STT
+    worksheet.mergeCells("C1:C2"); // Họ tên
+    worksheet.mergeCells("D1:D2"); // Thứ
+    worksheet.mergeCells("E1:F1"); // Lịch học
+    worksheet.mergeCells("G1:I1"); // Cắt cơm
+
+    // Style cho header
+    [headerRow1, headerRow2].forEach((row) => {
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: "Times New Roman", size: 12, bold: true };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE0E0E0" },
+        };
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
+    });
+
+    // Thêm dữ liệu
+    let currentUnit = "";
+    let unitStartRow = 3; // Bắt đầu từ hàng 3 (sau 2 header rows)
+
+    allRows.forEach((rowData, index) => {
+      const {
+        student,
+        studentIndex,
+        dayNumber,
+        daySchedule,
+        dayData,
+        isFirstRow,
+      } = rowData;
+
+      // Tạo dữ liệu cho từng môn học trong ngày
+      if (daySchedule.length > 0) {
+        daySchedule.forEach((schedule, scheduleIndex) => {
+          const row = worksheet.addRow([
+            isFirstRow ? student.unit : "",
+            isFirstRow ? studentIndex : "",
+            isFirstRow
+              ? `${student.fullName}\n${student.university?.name || ""}\n${
+                  student.major || ""
+                }\n${student.travelTime || ""}`
+              : "",
+            dayNumber,
+            schedule.subject || "",
+            schedule.time || "",
+            dayData.breakfast ? "X" : "",
+            dayData.lunch ? "X" : "",
+            dayData.dinner ? "X" : "",
+          ]);
+
+          // Style cho row
+          row.eachCell((cell, colNumber) => {
+            cell.font = { name: "Times New Roman", size: 11 };
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: "center",
+              wrapText: true,
+            };
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
+          });
+        });
+      } else {
+        // Nếu không có lịch học, vẫn hiển thị dòng cắt cơm
+        const row = worksheet.addRow([
+          isFirstRow ? student.unit : "",
+          isFirstRow ? studentIndex : "",
+          isFirstRow
+            ? `${student.fullName}\n${student.university?.name || ""}\n${
+                student.major || ""
+              }\n${student.travelTime || ""}`
+            : "",
+          dayNumber,
+          "",
+          "",
+          dayData.breakfast ? "X" : "",
+          dayData.lunch ? "X" : "",
+          dayData.dinner ? "X" : "",
+        ]);
+
+        // Style cho row
+        row.eachCell((cell, colNumber) => {
+          cell.font = { name: "Times New Roman", size: 11 };
+          cell.alignment = {
+            vertical: "middle",
+            horizontal: "center",
+            wrapText: true,
+          };
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
+      }
+
+      // Logic merge cells cho đơn vị
+      if (student.unit !== currentUnit) {
+        if (currentUnit !== "" && worksheet.rowCount > unitStartRow) {
+          worksheet.mergeCells(`A${unitStartRow}:A${worksheet.rowCount - 1}`);
+          worksheet.getCell(`A${unitStartRow}`).alignment = {
+            vertical: "middle",
+            horizontal: "center",
+          };
+        }
+        currentUnit = student.unit;
+        unitStartRow = worksheet.rowCount;
+      }
+    });
+
+    // Merge cells cho đơn vị cuối cùng
+    if (currentUnit !== "" && worksheet.rowCount > unitStartRow) {
+      worksheet.mergeCells(`A${unitStartRow}:A${worksheet.rowCount}`);
+      worksheet.getCell(`A${unitStartRow}`).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+    }
+
+    // Thêm chữ ký
+    const signatureRow = worksheet.rowCount + 2;
+    worksheet.mergeCells(`G${signatureRow}:I${signatureRow}`);
+    worksheet.getCell(`G${signatureRow}`).value = "PHÓ HỆ TRƯỞNG";
+    worksheet.getCell(`G${signatureRow}`).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell(`G${signatureRow}`).font = {
+      name: "Times New Roman",
+      size: 12,
+      bold: true,
+    };
+
+    // Tạo buffer và gửi file
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Tạo tên file động
+    const currentDate = new Date();
+    const dateString = currentDate
+      .toLocaleDateString("vi-VN")
+      .replace(/\//g, "-");
+    const timeString = currentDate
+      .toLocaleTimeString("vi-VN")
+      .replace(/:/g, "-");
+    const fileName = `Lich_cat_com_va_hoc_tap_${
+      unit || "tat_ca"
+    }_${dateString}_${timeString}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Lỗi khi xuất Excel:", error);
+    res.status(500).json({ message: "Lỗi khi xuất file Excel" });
+  }
+};
+
+const updateStudentRating = async (req, res) => {
+  try {
+    const { semesterResultId } = req.params;
+    const { partyRating, trainingRating, decisionNumber } = req.body;
+
+    const Student = require("../models/student");
+
+    // Tìm student có chứa semesterResult với id này
+    const student = await Student.findOne({
+      "semesterResults._id": semesterResultId,
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả học kỳ" });
+    }
+
+    // Tìm semester result cần cập nhật
+    const semesterIndex = student.semesterResults.findIndex(
+      (result) => result._id.toString() === semesterResultId
+    );
+
+    if (semesterIndex === -1) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả học kỳ" });
+    }
+
+    // Cập nhật xếp loại đảng viên
+    if (partyRating) {
+      student.semesterResults[semesterIndex].partyRating = {
+        decisionNumber: decisionNumber || "",
+        rating: partyRating,
+      };
+    }
+
+    // Cập nhật xếp loại rèn luyện
+    if (trainingRating) {
+      student.semesterResults[semesterIndex].trainingRating = trainingRating;
+    }
+
+    // Lưu thay đổi
+    await student.save();
+
+    res.status(200).json({
+      message: "Cập nhật xếp loại thành công",
+      data: student.semesterResults[semesterIndex],
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật xếp loại:", error);
+    res.status(500).json({ message: "Lỗi khi cập nhật xếp loại" });
   }
 };
 
@@ -3678,4 +4745,6 @@ module.exports = {
   generateAutoCutRiceForStudent,
   updateStudent,
   getAllStudentsGrades,
+  getExcelCutRiceWithSchedule,
+  updateStudentRating,
 };

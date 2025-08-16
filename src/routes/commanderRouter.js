@@ -58,6 +58,8 @@ const {
   deleteNotification,
   updateNotification,
   getExcelCutRice,
+  getExcelCutRiceWithSchedule,
+  updateStudentRating,
   getPdfLearningResult,
   getPdfPhysicalResutl,
   getPdfTuitionFee,
@@ -81,6 +83,21 @@ router.get(
 );
 // Export to Excel
 router.get("/cutRice/excel", verifyToken, isAdmin, getExcelCutRice);
+router.get(
+  "/cutRice/excel-with-schedule",
+  verifyToken,
+  isAdmin,
+  getExcelCutRiceWithSchedule
+);
+
+// Update student rating
+router.put(
+  "/updateStudentRating/:semesterResultId",
+  verifyToken,
+  isAdmin,
+  updateStudentRating
+);
+
 // Export to Pdf
 router.get("/learningResult/pdf", verifyToken, isAdmin, getPdfLearningResult);
 router.get("/physicalResult/pdf", verifyToken, isAdmin, getPdfPhysicalResutl);
