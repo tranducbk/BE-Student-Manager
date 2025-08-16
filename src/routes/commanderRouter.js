@@ -60,6 +60,8 @@ const {
   getExcelCutRice,
   getExcelCutRiceWithSchedule,
   updateStudentRating,
+  getAvailableYears,
+  getYearlyResults,
   getPdfLearningResult,
   getPdfPhysicalResutl,
   getPdfTuitionFee,
@@ -69,6 +71,7 @@ const {
   getCutRiceDetail,
   generateAutoCutRiceForStudent,
   getAllStudentsGrades,
+  getYearlyStatistics,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -92,11 +95,15 @@ router.get(
 
 // Update student rating
 router.put(
-  "/updateStudentRating/:semesterResultId",
+  "/updateStudentRating/:yearlyResultId",
   verifyToken,
   isAdmin,
   updateStudentRating
 );
+
+// Yearly statistics
+router.get("/yearlyResults/years", verifyToken, isAdmin, getAvailableYears);
+router.get("/yearlyResults", verifyToken, isAdmin, getYearlyResults);
 
 // Export to Pdf
 router.get("/learningResult/pdf", verifyToken, isAdmin, getPdfLearningResult);
@@ -284,6 +291,7 @@ router.put(
 );
 router.post("/learningResults", verifyToken, isAdmin, getLearningResults);
 router.get("/allStudentsGrades", verifyToken, isAdmin, getAllStudentsGrades);
+router.get("/yearlyStatistics", verifyToken, isAdmin, getYearlyStatistics);
 router.get(
   "/learningResultBySemester",
   verifyToken,

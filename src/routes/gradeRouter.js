@@ -6,6 +6,8 @@ const {
   addSemesterGrades,
   updateSemesterGrades,
   deleteSemesterGrades,
+  deleteYearlyResult,
+  recalculateAllYearlyResultsAPI,
   getGradeInfo,
   convertGrade,
   calculateAverage,
@@ -37,6 +39,16 @@ router.delete(
   "/:userId/:semester/:schoolYear",
   verifyToken,
   deleteSemesterGrades
+);
+
+// Xóa kết quả năm học và tất cả học kỳ thuộc năm đó
+router.delete("/yearly/:userId/:schoolYear", verifyToken, deleteYearlyResult);
+
+// Tính toán lại CPA cho tất cả các năm học
+router.post(
+  "/recalculate/:userId",
+  verifyToken,
+  recalculateAllYearlyResultsAPI
 );
 
 // Lấy thông tin điểm

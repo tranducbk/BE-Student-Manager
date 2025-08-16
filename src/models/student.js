@@ -65,19 +65,48 @@ const semesterResultSchema = new mongoose.Schema({
   cumulativeGrade4: { type: Number, default: 0 }, // Điểm tích lũy hệ 4
   cumulativeGrade10: { type: Number, default: 0 }, // Điểm tích lũy hệ 10
 
-  // Xếp loại đảng viên cho kỳ này
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+// Schema cho kết quả học tập theo năm học
+const yearlyResultSchema = new mongoose.Schema({
+  schoolYear: { type: String, required: true }, // Năm học (VD: 2023-2024)
+  semesters: [semesterResultSchema], // Danh sách các học kỳ trong năm
+
+  // Thống kê tổng hợp theo năm
+  totalCredits: { type: Number, default: 0 }, // Tổng số tín chỉ cả năm
+  averageGrade4: { type: Number, default: 0 }, // Điểm trung bình hệ 4 cả năm
+  averageGrade10: { type: Number, default: 0 }, // Điểm trung bình hệ 10 cả năm
+  cumulativeCredits: { type: Number, default: 0 }, // Tổng tín chỉ tích lũy cuối năm
+  cumulativeGrade4: { type: Number, default: 0 }, // Điểm tích lũy hệ 4 cuối năm
+  cumulativeGrade10: { type: Number, default: 0 }, // Điểm tích lũy hệ 10 cuối năm
+
+  // Xếp loại đảng viên theo năm (lấy từ học kỳ cuối cùng)
   partyRating: {
     decisionNumber: { type: String }, // Số quyết định
     rating: {
       type: String,
-      enum: ["HTXSNV", "HTTNV", "HTNV", "KHTNV"], // Hoàn thành xuất sắc nhiệm vụ, Hoàn thành tốt nhiệm vụ, Hoàn thành nhiệm vụ, Không hoàn thành nhiệm vụ
+      enum: ["HTXSNV", "HTTNV", "HTNV", "KHTNV"],
     },
   },
 
-  // Xếp loại rèn luyện cho kỳ này
+  // Xếp loại rèn luyện theo năm (lấy từ học kỳ cuối cùng)
   trainingRating: {
     type: String,
     enum: ["Yếu", "Trung bình", "Khá", "Tốt"],
+  },
+
+  // Thống kê môn học theo năm
+  totalSubjects: { type: Number, default: 0 }, // Tổng số môn học
+  passedSubjects: { type: Number, default: 0 }, // Số môn đạt
+  failedSubjects: { type: Number, default: 0 }, // Số môn không đạt
+
+  // Trạng thái học tập theo năm
+  academicStatus: {
+    type: String,
+    enum: ["Tốt", "Khá", "Trung bình", "Yếu", "Kém"],
+    default: "Trung bình",
   },
 
   createdAt: { type: Date, default: Date.now },
@@ -218,6 +247,7 @@ const studentSchema = mongoose.model(
     physicalResult: [physicalResultSchema],
     learningInformation: [learningInformationSchema],
     semesterResults: [semesterResultSchema],
+    yearlyResults: [yearlyResultSchema], // Kết quả học tập theo năm
     cutRice: [cutRiceSchema],
     // Thông tin người thân
     familyMembers: [familyMemberSchema],
