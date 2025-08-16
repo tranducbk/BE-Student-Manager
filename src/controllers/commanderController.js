@@ -4852,6 +4852,11 @@ const getYearlyStatistics = async (req, res) => {
           const totalDebt = lastResult.totalDebt || 0;
           const studentLevel = lastResult.studentLevel || 1;
 
+          // Tìm yearlyResult tương ứng trong student.yearlyResults
+          const existingYearlyResult = student.yearlyResults?.find(
+            (result) => result.schoolYear === schoolYear
+          );
+
           // Tạo kết quả thống kê năm học
           const yearlyResult = {
             _id: student._id,
@@ -4863,7 +4868,7 @@ const getYearlyStatistics = async (req, res) => {
             unit: student.unit || "",
             positionParty: student.positionParty || "Không",
             schoolYear: schoolYear,
-            yearlyResults: student.yearlyResults || [],
+            yearlyResultId: existingYearlyResult?._id || null,
             yearlyGPA: yearlyGPA,
             yearlyGrade10: yearlyGrade10,
             cumulativeGPA: cumulativeGPA,
@@ -4874,6 +4879,12 @@ const getYearlyStatistics = async (req, res) => {
             subjects: allSubjects,
             totalCredits: totalCredits,
             semesterCount: yearResults.length,
+            partyRating: existingYearlyResult?.partyRating || null,
+            trainingRating: existingYearlyResult?.trainingRating || null,
+            academicStatus: existingYearlyResult?.academicStatus || null,
+            totalSubjects: existingYearlyResult?.totalSubjects || 0,
+            passedSubjects: existingYearlyResult?.passedSubjects || 0,
+            failedSubjects: existingYearlyResult?.failedSubjects || 0,
           };
 
           console.log(
@@ -4881,93 +4892,173 @@ const getYearlyStatistics = async (req, res) => {
           );
           yearlyResults.push(yearlyResult);
         } else {
-          // Nếu không có schoolYear, tạo kết quả cho từng năm học
-          const yearGroups = {};
+          // Nếu không có schoolYear, sử dụng dữ liệu từ yearlyResults có sẵn
+          if (student.yearlyResults && student.yearlyResults.length > 0) {
+            student.yearlyResults.forEach((yearlyResult) => {
+              // Tính toán GPA từ semesterResults cho năm học này
+              const yearSemesterResults = semesterResults.filter(
+                (result) => result.schoolYear === yearlyResult.schoolYear
+              );
 
-          yearResults.forEach((result) => {
-            const year = result.schoolYear;
-            if (!yearGroups[year]) {
-              yearGroups[year] = {
-                results: [],
-                totalCredits: 0,
-                totalGradePoints: 0,
-                totalGradePoints10: 0,
-                allSubjects: [],
-              };
-            }
+              let totalCredits = 0;
+              let totalGradePoints = 0;
+              let totalGradePoints10 = 0;
+              let allSubjects = [];
 
-            yearGroups[year].results.push(result);
+              yearSemesterResults.forEach((result) => {
+                if (result.subjects && result.subjects.length > 0) {
+                  result.subjects.forEach((subject) => {
+                    const credits = subject.credits || 0;
+                    const gradePoint4 = subject.gradePoint4 || 0;
+                    const gradePoint10 = subject.gradePoint10 || 0;
 
-            if (result.subjects && result.subjects.length > 0) {
-              result.subjects.forEach((subject) => {
-                const credits = subject.credits || 0;
-                const gradePoint4 = subject.gradePoint4 || 0;
-                const gradePoint10 = subject.gradePoint10 || 0;
-
-                yearGroups[year].totalCredits += credits;
-                yearGroups[year].totalGradePoints += credits * gradePoint4;
-                yearGroups[year].totalGradePoints10 += credits * gradePoint10;
-                yearGroups[year].allSubjects.push(subject);
+                    totalCredits += credits;
+                    totalGradePoints += credits * gradePoint4;
+                    totalGradePoints10 += credits * gradePoint10;
+                    allSubjects.push(subject);
+                  });
+                }
               });
-            }
-          });
 
-          // Tạo kết quả cho từng năm học
-          Object.keys(yearGroups).forEach((year) => {
-            const group = yearGroups[year];
-            const yearlyGPA =
-              group.totalCredits > 0
-                ? (group.totalGradePoints / group.totalCredits).toFixed(2)
-                : "0.00";
-            const yearlyGrade10 =
-              group.totalCredits > 0
-                ? (group.totalGradePoints10 / group.totalCredits).toFixed(2)
-                : "0.00";
+              const yearlyGPA =
+                totalCredits > 0
+                  ? (totalGradePoints / totalCredits).toFixed(2)
+                  : "0.00";
+              const yearlyGrade10 =
+                totalCredits > 0
+                  ? (totalGradePoints10 / totalCredits).toFixed(2)
+                  : "0.00";
 
-            // Tính toán CPA tích lũy (lấy từ kết quả cuối cùng của năm học)
-            const lastResult = group.results[group.results.length - 1];
-            const cumulativeGPA =
-              lastResult.cumulativeGrade4?.toFixed(2) || "0.00";
-            const cumulativeGrade10 =
-              lastResult.cumulativeGrade10?.toFixed(2) || "0.00";
-            const cumulativeCredits = lastResult.cumulativeCredits || 0;
-            const totalDebt = lastResult.totalDebt || 0;
-            const studentLevel = lastResult.studentLevel || 1;
+              // Tính toán CPA tích lũy (lấy từ kết quả cuối cùng của năm học)
+              const lastResult =
+                yearSemesterResults[yearSemesterResults.length - 1];
+              const cumulativeGPA =
+                lastResult?.cumulativeGrade4?.toFixed(2) || "0.00";
+              const cumulativeGrade10 =
+                lastResult?.cumulativeGrade10?.toFixed(2) || "0.00";
+              const cumulativeCredits = lastResult?.cumulativeCredits || 0;
+              const totalDebt = lastResult?.totalDebt || 0;
 
-            // Tìm yearlyResult tương ứng trong student.yearlyResults
-            const existingYearlyResult = student.yearlyResults?.find(
-              (result) => result.schoolYear === year
-            );
+              const result = {
+                _id: student._id,
+                studentId: student._id,
+                fullName: student.fullName,
+                studentCode: student.studentId,
+                university: student.university?.universityName || "",
+                className: student.class?.className || "",
+                unit: student.unit || "",
+                positionParty: student.positionParty || "Không",
+                schoolYear: yearlyResult.schoolYear,
+                yearlyResultId: yearlyResult._id,
+                yearlyGPA: yearlyGPA,
+                yearlyGrade10: yearlyGrade10,
+                cumulativeGPA: cumulativeGPA,
+                cumulativeGrade10: cumulativeGrade10,
+                cumulativeCredit: cumulativeCredits,
+                totalDebt: totalDebt,
+                subjects: allSubjects,
+                totalCredits: totalCredits,
+                semesterCount: yearSemesterResults.length,
+                partyRating: yearlyResult.partyRating || null,
+                trainingRating: yearlyResult.trainingRating || null,
+                academicStatus: yearlyResult.academicStatus || null,
+                totalSubjects: yearlyResult.totalSubjects || 0,
+                passedSubjects: yearlyResult.passedSubjects || 0,
+                failedSubjects: yearlyResult.failedSubjects || 0,
+              };
 
-            const yearlyResult = {
-              _id: student._id,
-              studentId: student._id,
-              fullName: student.fullName,
-              studentCode: student.studentId,
-              university: student.university?.universityName || "",
-              className: student.class?.className || "",
-              unit: student.unit || "",
-              positionParty: student.positionParty || "Không",
-              schoolYear: year,
-              yearlyResults: student.yearlyResults || [],
-              yearlyResultId: existingYearlyResult?._id || null, // Thêm ID của yearlyResult
-              yearlyGPA: yearlyGPA,
-              yearlyGrade10: yearlyGrade10,
-              cumulativeGPA: cumulativeGPA,
-              cumulativeGrade10: cumulativeGrade10,
-              cumulativeCredit: cumulativeCredits,
-              totalDebt: totalDebt,
-              studentLevel: studentLevel,
-              subjects: group.allSubjects,
-              totalCredits: group.totalCredits,
-              semesterCount: group.results.length,
-            };
+              console.log(
+                `  - Yearly result for ${yearlyResult.schoolYear}: ${result.fullName} - GPA: ${yearlyGPA}, CPA: ${cumulativeGPA}`
+              );
+              yearlyResults.push(result);
+            });
+          } else {
+            // Fallback: tạo kết quả cho từng năm học từ semesterResults
+            const yearGroups = {};
 
-            console.log(
-              `  - Yearly result for ${year}: ${yearlyResult.fullName} - GPA: ${yearlyGPA}, CPA: ${cumulativeGPA}`
-            );
-            yearlyResults.push(yearlyResult);
-          });
+            yearResults.forEach((result) => {
+              const year = result.schoolYear;
+              if (!yearGroups[year]) {
+                yearGroups[year] = {
+                  results: [],
+                  totalCredits: 0,
+                  totalGradePoints: 0,
+                  totalGradePoints10: 0,
+                  allSubjects: [],
+                };
+              }
+
+              yearGroups[year].results.push(result);
+
+              if (result.subjects && result.subjects.length > 0) {
+                result.subjects.forEach((subject) => {
+                  const credits = subject.credits || 0;
+                  const gradePoint4 = subject.gradePoint4 || 0;
+                  const gradePoint10 = subject.gradePoint10 || 0;
+
+                  yearGroups[year].totalCredits += credits;
+                  yearGroups[year].totalGradePoints += credits * gradePoint4;
+                  yearGroups[year].totalGradePoints10 += credits * gradePoint10;
+                  yearGroups[year].allSubjects.push(subject);
+                });
+              }
+            });
+
+            // Tạo kết quả cho từng năm học
+            Object.keys(yearGroups).forEach((year) => {
+              const group = yearGroups[year];
+              const yearlyGPA =
+                group.totalCredits > 0
+                  ? (group.totalGradePoints / group.totalCredits).toFixed(2)
+                  : "0.00";
+              const yearlyGrade10 =
+                group.totalCredits > 0
+                  ? (group.totalGradePoints10 / group.totalCredits).toFixed(2)
+                  : "0.00";
+
+              // Tính toán CPA tích lũy (lấy từ kết quả cuối cùng của năm học)
+              const lastResult = group.results[group.results.length - 1];
+              const cumulativeGPA =
+                lastResult.cumulativeGrade4?.toFixed(2) || "0.00";
+              const cumulativeGrade10 =
+                lastResult.cumulativeGrade10?.toFixed(2) || "0.00";
+              const cumulativeCredits = lastResult.cumulativeCredits || 0;
+              const totalDebt = lastResult.totalDebt || 0;
+
+              const yearlyResult = {
+                _id: student._id,
+                studentId: student._id,
+                fullName: student.fullName,
+                studentCode: student.studentId,
+                university: student.university?.universityName || "",
+                className: student.class?.className || "",
+                unit: student.unit || "",
+                positionParty: student.positionParty || "Không",
+                schoolYear: year,
+                yearlyResultId: null, // Không có yearlyResult
+                yearlyGPA: yearlyGPA,
+                yearlyGrade10: yearlyGrade10,
+                cumulativeGPA: cumulativeGPA,
+                cumulativeGrade10: cumulativeGrade10,
+                cumulativeCredit: cumulativeCredits,
+                totalDebt: totalDebt,
+                subjects: group.allSubjects,
+                totalCredits: group.totalCredits,
+                semesterCount: group.results.length,
+                partyRating: null,
+                trainingRating: null,
+                academicStatus: null,
+                totalSubjects: 0,
+                passedSubjects: 0,
+                failedSubjects: 0,
+              };
+
+              console.log(
+                `  - Yearly result for ${year}: ${yearlyResult.fullName} - GPA: ${yearlyGPA}, CPA: ${cumulativeGPA}`
+              );
+              yearlyResults.push(yearlyResult);
+            });
+          }
         }
       } catch (error) {
         console.log(`Error processing student ${student._id}:`, error);

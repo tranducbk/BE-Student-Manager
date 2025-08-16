@@ -106,7 +106,6 @@ const yearlyResultSchema = new mongoose.Schema({
   academicStatus: {
     type: String,
     enum: ["Tốt", "Khá", "Trung bình", "Yếu", "Kém"],
-    default: "Trung bình",
   },
 
   createdAt: { type: Date, default: Date.now },
