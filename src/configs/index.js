@@ -5,4 +5,5 @@ module.exports = {
   EMAIL_SERVICE: process.env.EMAIL_SERVICE,
   EMAIL_USER: process.env.EMAIL_USER,
   EMAIL_PASS: process.env.EMAIL_PASS,
+  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
 };

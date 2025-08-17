@@ -8,6 +8,7 @@ const commanderSchema = mongoose.model(
     gender: String,
     birthday: Date,
     hometown: String,
+    currentAddress: String,
     email: String,
     phoneNumber: String,
     startWork: Number,

@@ -91,7 +91,7 @@ const Login = async (req, res) => {
 const changePassword = async (req, res) => {
   try {
     if (req.body.newPassword !== req.body.confirmPassword) {
-      return res.status(401).json("Xác nhận mật khẩu mới không đúng");
+      return res.status(401).json("Xác nhận mật khẩu mới chưa trùng khớp");
     }
 
     const users = await User.findById(req.params.userId);

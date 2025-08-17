@@ -9,6 +9,7 @@ const {
   EMAIL_SERVICE,
   EMAIL_USER,
   EMAIL_PASS,
+  CLIENT_URL,
 } = require("../configs/index");
 
 const transporter = nodemailer.createTransport({
@@ -51,7 +52,7 @@ const forgotPassword = async (req, res) => {
 
   const htmlContent = `
     <p>Bạn đã yêu cầu đặt lại mật khẩu. Nhấp vào liên kết bên dưới để đặt lại mật khẩu của bạn:</p>
-    <p>http://localhost:3000/reset-password/${token}</p>
+    <p>${CLIENT_URL}/reset-password/${token}</p>
   `;
 
   try {
