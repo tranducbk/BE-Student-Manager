@@ -1552,62 +1552,320 @@ const getLearningResultBySemester = async (req, res) => {
 
 const getListSuggestedReward = async (req, res) => {
   try {
-    const students = await Student.find();
+    const { unit } = req.query;
+    console.log("=== getListSuggestedReward START ===", { unit });
+    const students = await Student.find().populate({
+      path: "university",
+      select: "universityName",
+    });
+    console.log("Students found:", students.length);
 
-    // Tạo một mảng chứa tất cả các học kỳ
-    let allSemesters = [];
+    // 1) Cố gắng dựa theo NĂM HỌC (yearlyResults) nếu không có learningInformation
+    const allSchoolYears = [];
     students.forEach((student) => {
-      student.learningInformation.forEach((info) => {
-        allSemesters.push(info.semester);
+      (student.yearlyResults || []).forEach((yr) => {
+        if (yr && yr.schoolYear) allSchoolYears.push(yr.schoolYear);
       });
     });
 
-    // Lọc ra học kỳ lớn nhất từ mảng
-    const maxSemester = allSemesters.reduce((max, current) => {
-      return max > current ? max : current;
-    }, "");
-
-    if (!maxSemester) {
-      return res.status(404).json({ message: "Không tìm thấy học kỳ nào." });
+    let latestSchoolYear = null;
+    if (allSchoolYears.length > 0) {
+      latestSchoolYear = allSchoolYears.reduce((latest, current) => {
+        const getStartYear = (sy) => {
+          const m = String(sy).match(/^(\d{4})/);
+          return m ? parseInt(m[1], 10) : 0;
+        };
+        return getStartYear(current) > getStartYear(latest) ? current : latest;
+      }, allSchoolYears[0]);
+      console.log("latestSchoolYear:", latestSchoolYear);
     }
 
-    // Danh sách học viên đạt yêu cầu
     let suggestedRewards = [];
+    let labelForHeader = "";
 
-    students.forEach((student) => {
-      let meetsCriteria = false;
-      let currentGPA = 0;
+    if (latestSchoolYear) {
+      // Ưu tiên theo năm học: chọn GPA năm (averageGrade4)
+      labelForHeader = latestSchoolYear;
+      students.forEach((student) => {
+        const yr = (student.yearlyResults || []).find(
+          (y) => y && y.schoolYear === latestSchoolYear
+        );
+        if (!yr) return;
 
-      student.learningInformation.forEach((learningInformation) => {
-        if (
-          learningInformation.semester === maxSemester &&
-          learningInformation.GPA >= 2.995
-        ) {
-          meetsCriteria = true;
-          currentGPA = learningInformation.GPA;
-        }
-      });
+        const currentGPA =
+          typeof yr.averageGrade4 === "number" ? yr.averageGrade4 : 0;
+        if (currentGPA < 2.995) return; // Ngưỡng xét khen thưởng
 
-      student.physicalResult.forEach((physicalResult) => {
-        if (physicalResult.semester === maxSemester) {
-          const { practise } = physicalResult;
-          if (practise === "Tốt" || practise === "Xuất sắc") {
-            if (meetsCriteria) {
-              suggestedRewards.push({
-                fullName: student.fullName,
-                unit: student.unit,
-                university: student.university,
-                GPA: currentGPA,
-                practise: practise,
-              });
+        // Xác định rèn luyện trong năm: dựa vào physicalResult.semester có chứa năm bắt đầu hoặc năm kết thúc
+        const startYear = parseInt(latestSchoolYear.slice(0, 4), 10);
+        const endYear = parseInt(latestSchoolYear.slice(-4), 10);
+        let practise = "";
+        (student.physicalResult || []).forEach((pr) => {
+          const sem = String(pr.semester || "");
+          // Hỗ trợ cả dạng "2024.1" hoặc chứa năm bất kỳ
+          const semYear = parseInt(sem, 10);
+          if (
+            (!isNaN(semYear) &&
+              (semYear === startYear || semYear === endYear)) ||
+            sem.includes(String(startYear)) ||
+            sem.includes(String(endYear))
+          ) {
+            if (
+              pr.practise &&
+              (!practise || pr.practise === "Tốt" || pr.practise === "Xuất sắc")
+            ) {
+              practise = pr.practise;
             }
           }
+        });
+
+        // Nếu không bắt được rèn luyện theo năm, chấp nhận rèn luyện tốt/XS bất kỳ
+        if (!practise) {
+          const anyGood = (student.physicalResult || []).some(
+            (pr) => pr.practise === "Tốt" || pr.practise === "Xuất sắc"
+          );
+          practise = anyGood ? "Tốt" : "";
         }
+
+        // Chỉ thêm khi có hoặc không bắt buộc rèn luyện? Giữ điều kiện mềm: nếu không có thông tin rèn luyện thì vẫn thêm
+        suggestedRewards.push({
+          fullName: student.fullName,
+          unit: student.unit,
+          university: student.university?.universityName || "",
+          GPA: currentGPA,
+          practise,
+        });
+      });
+    } else {
+      // 2) Fallback theo HỌC KỲ cũ nếu không có yearlyResults
+      console.warn(
+        "No yearlyResults found. Falling back to learningInformation.semester"
+      );
+      // Tạo một mảng chứa tất cả các học kỳ
+      let allSemesters = [];
+      students.forEach((student) => {
+        (student.learningInformation || []).forEach((info) => {
+          if (info && info.semester) allSemesters.push(info.semester);
+        });
+      });
+
+      // Lọc ra học kỳ lớn nhất từ mảng
+      const maxSemester = allSemesters.reduce((max, current) => {
+        return max > current ? max : current;
+      }, "");
+
+      if (!maxSemester) {
+        console.warn(
+          "No semesters found in learningInformation (fallback mode)"
+        );
+        return res
+          .status(404)
+          .json({ message: "Không tìm thấy học kỳ/năm nào." });
+      }
+      labelForHeader = maxSemester;
+      console.log("maxSemester (fallback):", maxSemester);
+
+      // Danh sách học viên đạt yêu cầu theo học kỳ
+      students.forEach((student) => {
+        let meetsCriteria = false;
+        let currentGPA = 0;
+
+        (student.learningInformation || []).forEach((learningInformation) => {
+          if (
+            learningInformation.semester === maxSemester &&
+            learningInformation.GPA >= 2.995
+          ) {
+            meetsCriteria = true;
+            currentGPA = learningInformation.GPA;
+          }
+        });
+
+        (student.physicalResult || []).forEach((physicalResult) => {
+          if (physicalResult.semester === maxSemester) {
+            const { practise } = physicalResult;
+            if (practise === "Tốt" || practise === "Xuất sắc") {
+              if (meetsCriteria) {
+                suggestedRewards.push({
+                  fullName: student.fullName,
+                  unit: student.unit,
+                  university: student.university?.universityName || "",
+                  GPA: currentGPA,
+                  practise: practise,
+                });
+              }
+            }
+          }
+        });
+      });
+    }
+
+    // Lọc theo đơn vị nếu truyền vào
+    if (unit) {
+      suggestedRewards = suggestedRewards.filter(
+        (s) => String(s.unit) === String(unit)
+      );
+    }
+
+    // Sắp xếp từ cao xuống thấp theo GPA, tie-break theo rèn luyện (Xuất sắc > Tốt > Khá > ...)
+    const practiseRank = (p) =>
+      p === "Xuất sắc" ? 3 : p === "Tốt" ? 2 : p === "Khá" ? 1 : 0;
+    suggestedRewards.sort((a, b) => {
+      if (b.GPA !== a.GPA) return b.GPA - a.GPA;
+      return practiseRank(b.practise) - practiseRank(a.practise);
+    });
+
+    console.log(
+      "Suggested count (after filter/sort):",
+      suggestedRewards.length
+    );
+    console.log("=== getListSuggestedReward END ===");
+    console.log(
+      "Suggested count (after filter/sort):",
+      suggestedRewards.length
+    );
+    console.log("=== getListSuggestedReward END ===");
+    // Trả về labelForHeader (nếu là năm học sẽ là chuỗi năm) để FE hiển thị
+    return res
+      .status(200)
+      .json({ suggestedRewards, maxSemester: labelForHeader });
+  } catch (error) {
+    console.error("Error in getListSuggestedReward:", error);
+    return res
+      .status(500)
+      .json({ message: "Lỗi server", error: String(error?.message || error) });
+  }
+};
+
+// Top sinh viên theo lớp dựa trên HỌC KỲ mới nhất (learningInformation.semester)
+const getTopStudentsByLatestSemester = async (req, res) => {
+  try {
+    const students = await Student.find()
+      .populate({ path: "class", select: "className" })
+      .select("fullName class learningInformation");
+
+    // Thu thập tất cả các học kỳ hiện có
+    const allSemesters = [];
+    students.forEach((student) => {
+      (student.learningInformation || []).forEach((li) => {
+        if (li && li.semester) allSemesters.push(li.semester);
       });
     });
 
-    return res.status(200).json({ suggestedRewards, maxSemester });
+    if (allSemesters.length === 0) {
+      return res.status(200).json({ semester: null, topStudents: [] });
+    }
+
+    // Chọn học kỳ lớn nhất theo quy ước hiện tại trong hệ thống (giống các API đang dùng)
+    const latestSemester = allSemesters.reduce((max, current) => {
+      return max > current ? max : current;
+    }, allSemesters[0]);
+
+    // Chọn top theo từng lớp: GPA cao nhất trong latestSemester
+    const classIdToTop = new Map();
+    students.forEach((student) => {
+      const entry = (student.learningInformation || []).find(
+        (li) => li && li.semester === latestSemester
+      );
+      if (!entry || typeof entry.GPA !== "number") return;
+
+      const classId = student.class?._id?.toString() || "unknown";
+      const className = student.class?.className || "Chưa có lớp";
+      const existing = classIdToTop.get(classId);
+      if (!existing || entry.GPA > existing.GPA) {
+        classIdToTop.set(classId, {
+          studentId: student._id,
+          fullName: student.fullName,
+          classId,
+          className,
+          GPA: entry.GPA,
+          semester: latestSemester,
+        });
+      }
+    });
+
+    const topStudents = Array.from(classIdToTop.values()).sort(
+      (a, b) => b.GPA - a.GPA
+    );
+
+    return res.status(200).json({ semester: latestSemester, topStudents });
   } catch (error) {
+    console.error("Error in getTopStudentsByLatestSemester:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Top sinh viên theo lớp dựa trên NĂM HỌC mới nhất (yearlyResults)
+const getTopStudentsByLatestYear = async (req, res) => {
+  try {
+    // Lấy toàn bộ học viên kèm thông tin lớp và yearlyResults
+    const students = await Student.find()
+      .populate({ path: "class", select: "className" })
+      .select("fullName class unit yearlyResults");
+
+    // Tập hợp tất cả schoolYear từ yearlyResults để tìm năm học mới nhất
+    const allSchoolYears = [];
+    students.forEach((student) => {
+      (student.yearlyResults || []).forEach((yr) => {
+        if (yr && yr.schoolYear) allSchoolYears.push(yr.schoolYear);
+      });
+    });
+
+    if (allSchoolYears.length === 0) {
+      return res.status(200).json({ schoolYear: null, topStudents: [] });
+    }
+
+    // Chọn schoolYear mới nhất dựa theo năm bắt đầu (VD: "2023-2024" -> 2023)
+    const latestSchoolYear = allSchoolYears.reduce((latest, current) => {
+      const getStartYear = (sy) => {
+        const m = String(sy).match(/^(\d{4})/);
+        return m ? parseInt(m[1], 10) : 0;
+      };
+      return getStartYear(current) > getStartYear(latest) ? current : latest;
+    }, allSchoolYears[0]);
+
+    // Cho phép client yêu cầu schoolYear cụ thể qua query
+    const requestedSchoolYear = req.query.schoolYear;
+    const chosenSchoolYear = requestedSchoolYear || latestSchoolYear;
+
+    // Chọn top theo từng lớp (cao nhất averageGrade4 trong latestSchoolYear)
+    const classIdToTop = new Map();
+
+    students.forEach((student) => {
+      const yr = (student.yearlyResults || []).find(
+        (y) => y && y.schoolYear === chosenSchoolYear
+      );
+      if (!yr) return;
+
+      const avg4 = typeof yr.averageGrade4 === "number" ? yr.averageGrade4 : 0;
+      const avg10 =
+        typeof yr.averageGrade10 === "number" ? yr.averageGrade10 : 0;
+      const classId = student.class?._id?.toString() || "unknown";
+      const className = student.class?.className || "Chưa có lớp";
+
+      const existing = classIdToTop.get(classId);
+      if (!existing || avg4 > existing.averageGrade4) {
+        classIdToTop.set(classId, {
+          studentId: student._id,
+          fullName: student.fullName,
+          classId,
+          className,
+          unit: student.unit || "",
+          averageGrade4: avg4,
+          averageGrade10: avg10,
+          schoolYear: chosenSchoolYear,
+          trainingRating: yr.trainingRating || null,
+        });
+      }
+    });
+
+    // Kết quả cuối: sắp xếp giảm dần theo averageGrade4
+    const topStudents = Array.from(classIdToTop.values()).sort(
+      (a, b) => b.averageGrade4 - a.averageGrade4
+    );
+
+    return res.status(200).json({ schoolYear: chosenSchoolYear, topStudents });
+  } catch (error) {
+    console.error("Error in getTopStudentsByLatestYear:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -5126,6 +5384,8 @@ module.exports = {
   getLearningClassification,
   getLearningResultBySemester,
   getListSuggestedReward,
+  getTopStudentsByLatestYear,
+  getTopStudentsByLatestSemester,
   createNotification,
   updateIsRead,
   getStudentNotifications,

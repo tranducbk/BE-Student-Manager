@@ -52,6 +52,8 @@ const {
   getLearningClassification,
   getLearningResultBySemester,
   getListSuggestedReward,
+  getTopStudentsByLatestYear,
+  getTopStudentsByLatestSemester,
   createNotification,
   updateIsRead,
   getStudentNotifications,
@@ -309,6 +311,18 @@ router.get(
   verifyToken,
   isAdmin,
   getListSuggestedReward
+);
+router.get(
+  "/topStudents/latestYear",
+  verifyToken,
+  isAdmin,
+  getTopStudentsByLatestYear
+);
+router.get(
+  "/topStudents/latestSemester",
+  verifyToken,
+  isAdmin,
+  getTopStudentsByLatestSemester
 );
 router.get("/learningResultAll", verifyToken, isAdmin, getLearningResultAll);
 router.get("/timeTables", verifyToken, isAdmin, getTimeTables);
