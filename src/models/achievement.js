@@ -107,7 +107,7 @@ const achievementSchema = mongoose.model(
     },
     eligibleForNationalReward: {
       type: Boolean,
-      default: false, // Đủ điều kiện bằng khen toàn quân
+      default: false, // Đủ điều kiện CSTĐ Toàn Quân
     },
     // Thông tin đề xuất cho năm tiếp theo
     nextYearRecommendations: {

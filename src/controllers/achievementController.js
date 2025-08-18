@@ -469,9 +469,23 @@ const getRecommendations = async (req, res) => {
       // Nếu chưa đủ 3 năm liên tiếp thì đề xuất thêm 1 năm nữa để đạt toàn quân
       if (achievement.nextYearRecommendations.yearsToNationalReward === 1) {
         suggestions.push(
-          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận bằng khen toàn quân"
+          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận CSTĐ Toàn Quân"
         );
       }
+    }
+
+    // Điều kiện mới: Cứ MỖI CỤM 3 NĂM CSTD liên tiếp (3, 6, ...), CHƯA có NCKH => đề xuất cần NCKH để nhận toàn quân
+    if (
+      achievement.nextYearRecommendations.consecutiveCompetitiveYears > 0 &&
+      achievement.nextYearRecommendations.consecutiveCompetitiveYears % 3 ===
+        0 &&
+      achievement.totalScientificTopics === 0 &&
+      achievement.totalScientificInitiatives === 0 &&
+      !achievement.eligibleForNationalReward
+    ) {
+      suggestions.push(
+        "Cần có đề tài hoặc sáng kiến khoa học để đủ điều kiện nhận CSTĐ Toàn Quân"
+      );
     }
 
     return res.status(200).json({
@@ -598,7 +612,7 @@ const getRecommendationsByStudentId = async (req, res) => {
       // Nếu chưa đủ 3 năm liên tiếp thì đề xuất thêm 1 năm nữa để đạt toàn quân
       if (achievement.nextYearRecommendations.yearsToNationalReward === 1) {
         suggestions.push(
-          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận bằng khen toàn quân"
+          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận CSTĐ Toàn Quân"
         );
       }
     }
@@ -610,20 +624,34 @@ const getRecommendationsByStudentId = async (req, res) => {
       (achievement.totalScientificTopics > 0 ||
         achievement.totalScientificInitiatives > 0) &&
       achievement.eligibleForMinistryReward &&
-      !achievement.eligibleForNationalReward // Chưa đủ điều kiện bằng khen toàn quân
+      !achievement.eligibleForNationalReward // Chưa đủ điều kiện CSTĐ Toàn Quân
     ) {
       suggestions.push("Đã đủ điều kiện nhận bằng khen Bộ Quốc Phòng");
       // Nếu chưa đủ 3 năm liên tiếp thì đề xuất thêm 1 năm nữa để đạt toàn quân
       if (achievement.nextYearRecommendations.yearsToNationalReward === 1) {
         suggestions.push(
-          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận bằng khen toàn quân"
+          "Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận CSTĐ Toàn Quân"
         );
       }
     }
 
-    // Điều kiện 5: Đã đủ điều kiện bằng khen toàn quân
+    // Điều kiện mới: MỖI CỤM 3 năm CSTD liên tiếp (3, 6, ...), chưa có NCKH => đề xuất cần NCKH để nhận CSTĐ Toàn Quân
+    if (
+      achievement.nextYearRecommendations.consecutiveCompetitiveYears > 0 &&
+      achievement.nextYearRecommendations.consecutiveCompetitiveYears % 3 ===
+        0 &&
+      achievement.totalScientificTopics === 0 &&
+      achievement.totalScientificInitiatives === 0 &&
+      !achievement.eligibleForNationalReward
+    ) {
+      suggestions.push(
+        "Cần có đề tài hoặc sáng kiến khoa học để đủ điều kiện nhận CSTĐ Toàn Quân"
+      );
+    }
+
+    // Điều kiện 5: Đã đủ điều kiện CSTĐ Toàn Quân
     if (achievement.eligibleForNationalReward) {
-      suggestions.push("Đã đủ điều kiện nhận bằng khen toàn quân");
+      suggestions.push("Đã đủ điều kiện nhận CSTĐ Toàn Quân");
     }
 
     // Kiểm tra xem đã nhận bằng khen chưa
@@ -634,16 +662,16 @@ const getRecommendationsByStudentId = async (req, res) => {
       (ya) => ya.hasNationalReward
     );
 
-    // Nếu đã có bằng khen toàn quân thì không đề xuất gì nữa
+    // Nếu đã có CSTĐ Toàn Quân thì không đề xuất gì nữa
     if (hasNationalReward) {
       suggestions.length = 0; // Xóa tất cả suggestions
-      suggestions.push("Đã có bằng khen toàn quân - Không cần đề xuất thêm");
+      suggestions.push("Đã có CSTĐ Toàn Quân - Không cần đề xuất thêm");
     }
     // Nếu đã có bằng khen bộ quốc phòng nhưng chưa có toàn quân
     else if (hasMinistryReward) {
       suggestions.length = 0; // Xóa tất cả suggestions
       suggestions.push(
-        "Đã có bằng khen Bộ Quốc Phòng - Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận bằng khen toàn quân"
+        "Đã có bằng khen Bộ Quốc Phòng - Cần thêm 1 năm chiến sĩ thi đua để đủ điều kiện nhận CSTĐ Toàn Quân"
       );
     }
 
@@ -759,7 +787,7 @@ const calculateAchievementStats = async (achievement) => {
     (achievement.totalScientificTopics > 0 ||
       achievement.totalScientificInitiatives > 0);
 
-  // Kiểm tra điều kiện bằng khen toàn quân
+  // Kiểm tra điều kiện CSTĐ Toàn Quân
   // (3 năm chiến sĩ thi đua LIÊN TIẾP + có đề tài nghiên cứu HOẶC sáng kiến đã duyệt)
   // Chỉ đủ điều kiện khi đã đến năm thứ 3 của chuỗi
   achievement.eligibleForNationalReward =
@@ -784,7 +812,9 @@ const calculateAchievementStats = async (achievement) => {
     lastCompetitiveYear: lastCompetitiveYear,
     nextYear: nextYear,
     // Nếu năm tiếp theo là năm liên tục với chuỗi hiện tại
-    canContinueStreak: nextYear === lastCompetitiveYear + 1,
+    canContinueStreak:
+      nextYear === lastCompetitiveYear + 1 &&
+      maxConsecutiveCompetitive % 3 !== 0,
   };
 
   await achievement.save();
