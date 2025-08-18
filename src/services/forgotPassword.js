@@ -9,20 +9,61 @@ const {
   EMAIL_SERVICE,
   EMAIL_USER,
   EMAIL_PASS,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_SECURE,
   CLIENT_URL,
 } = require("../configs/index");
 
-const transporter = nodemailer.createTransport({
-  service: EMAIL_SERVICE,
-  auth: {
-    user: EMAIL_USER,
-    pass: EMAIL_PASS,
-  },
-});
+// Tạo transporter dựa trên cấu hình
+const createTransporter = () => {
+  // Nếu sử dụng Gmail
+  if (EMAIL_SERVICE === "gmail") {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: EMAIL_USER, // chatgptplus.h5@gmail.com
+        pass: EMAIL_PASS, // App Password của Gmail
+      },
+    });
+  }
+
+  // Nếu sử dụng SendGrid hoặc SMTP khác
+  if (SMTP_HOST) {
+    return nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT || 587,
+      secure: SMTP_SECURE === "true" || false,
+      auth: {
+        user: EMAIL_USER, // "apikey" cho SendGrid
+        pass: EMAIL_PASS, // API Key của SendGrid
+      },
+    });
+  }
+
+  // Fallback cho development
+  return nodemailer.createTransport({
+    service: EMAIL_SERVICE || "gmail",
+    auth: {
+      user: EMAIL_USER,
+      pass: EMAIL_PASS,
+    },
+  });
+};
+
+const transporter = createTransporter();
 
 const sendEmail = async (to, subject, htmlContent) => {
+  // Xác định email người gửi
+  let fromEmail = EMAIL_USER;
+
+  // Nếu dùng SendGrid, sử dụng email đã verify
+  if (SMTP_HOST && SMTP_HOST.includes("sendgrid")) {
+    fromEmail = "chatgptplus.h5@gmail.com"; // Email đã verify trong SendGrid
+  }
+
   const mailOptions = {
-    from: EMAIL_USER,
+    from: fromEmail,
     to,
     subject,
     html: htmlContent,
