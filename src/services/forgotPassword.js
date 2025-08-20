@@ -17,14 +17,6 @@ const {
 
 // Tạo transporter dựa trên cấu hình
 const createTransporter = () => {
-  console.log("Email config:", {
-    EMAIL_SERVICE,
-    EMAIL_USER,
-    SMTP_HOST,
-    SMTP_PORT,
-    SMTP_SECURE,
-  });
-
   // Nếu sử dụng SendGrid (ưu tiên cao nhất)
   if (SMTP_HOST && SMTP_HOST.includes("sendgrid")) {
     console.log("Using SendGrid SMTP");

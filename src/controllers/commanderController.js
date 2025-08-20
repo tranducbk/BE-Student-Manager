@@ -206,6 +206,8 @@ const createCommander = async (req, res) => {
       gender,
       birthday,
       hometown,
+      ethnicity,
+      religion,
       currentAddress,
       email,
       phoneNumber,
@@ -229,6 +231,8 @@ const createCommander = async (req, res) => {
         gender,
         birthday,
         hometown,
+        ethnicity,
+        religion,
         currentAddress,
         email,
         phoneNumber,
@@ -287,6 +291,7 @@ const createStudent = async (req, res) => {
       email,
       phoneNumber,
       enrollment,
+      graduationDate,
       class: classId,
       educationLevel,
       organization,
@@ -313,6 +318,7 @@ const createStudent = async (req, res) => {
       email,
       phoneNumber,
       enrollment,
+      graduationDate,
       class: classId,
       educationLevel,
       organization,
@@ -3642,6 +3648,7 @@ const updateStudent = async (req, res) => {
       email,
       phoneNumber,
       enrollment,
+      graduationDate,
       class: newClassId,
       educationLevel,
       organization,
@@ -3676,6 +3683,7 @@ const updateStudent = async (req, res) => {
       email,
       phoneNumber,
       enrollment,
+      graduationDate,
       class: newClassId,
       educationLevel,
       organization,
@@ -5335,6 +5343,480 @@ const getYearlyStatistics = async (req, res) => {
   }
 };
 
+const getWordTuitionFee = async (req, res) => {
+  try {
+    const semesterQuery = req.query.semester;
+    const schoolYearQuery = req.query.schoolYear;
+    const unitQuery = req.query.unit;
+
+    // Populate university và class để lấy thông tin đầy đủ
+    const students = await Student.find().populate([
+      { path: "university", select: "universityName" },
+      { path: "class", select: "className" },
+    ]);
+
+    let tuitionFees = [];
+
+    students.forEach((student) => {
+      student.tuitionFee.forEach((tuitionFee) => {
+        tuitionFees.push({
+          _id: tuitionFee._id,
+          studentId: student._id,
+          fullName: student.fullName,
+          university:
+            (student.university && student.university.universityName) || "",
+          unit: student.unit,
+          className: (student.class && student.class.className) || "",
+          totalAmount: tuitionFee.totalAmount,
+          semester: tuitionFee.semester,
+          schoolYear: tuitionFee.schoolYear,
+          content: tuitionFee.content,
+          status: tuitionFee.status,
+        });
+      });
+    });
+
+    // Lọc theo học kỳ
+    if (semesterQuery && semesterQuery !== "all") {
+      const semesterArray = semesterQuery.split(",");
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        return semesterArray.includes(tuitionFee.semester);
+      });
+    }
+
+    // Lọc theo năm học
+    if (schoolYearQuery && schoolYearQuery !== "all") {
+      const schoolYearArray = schoolYearQuery.split(",");
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        return schoolYearArray.includes(tuitionFee.schoolYear);
+      });
+    }
+
+    // Lọc theo đơn vị
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+
+      tuitionFees = tuitionFees.filter((tuitionFee) => {
+        const isIncluded = unitArray.some(
+          (unitName) =>
+            tuitionFee.className === unitName ||
+            tuitionFee.unit === unitName ||
+            tuitionFee.className.includes(unitName) ||
+            tuitionFee.unit.includes(unitName)
+        );
+
+        return isIncluded;
+      });
+    }
+
+    // Sắp xếp theo thứ tự từ L1 đến L6
+    tuitionFees.sort((a, b) => {
+      const unitOrder = {
+        "L1 - H5": 1,
+        "L2 - H5": 2,
+        "L3 - H5": 3,
+        "L4 - H5": 4,
+        "L5 - H5": 5,
+        "L6 - H5": 6,
+      };
+
+      const aOrder = unitOrder[a.unit] || 999;
+      const bOrder = unitOrder[b.unit] || 999;
+
+      return aOrder - bOrder;
+    });
+
+    // Tính tổng học phí và phân loại theo trạng thái
+    const totalAmountSum = tuitionFees.reduce((sum, tuitionFee) => {
+      return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
+    }, 0);
+
+    const paidAmountSum = tuitionFees
+      .filter((tuitionFee) => tuitionFee.status === "Đã thanh toán")
+      .reduce((sum, tuitionFee) => {
+        return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
+      }, 0);
+
+    const unpaidAmountSum = tuitionFees
+      .filter((tuitionFee) => tuitionFee.status === "Chưa thanh toán")
+      .reduce((sum, tuitionFee) => {
+        return sum + parseInt(tuitionFee.totalAmount.replace(/\./g, ""));
+      }, 0);
+
+    // Tạo tên file động dựa trên các tham số
+    let fileName = "Thong_ke_hoc_phi_he_hoc_vien_5";
+
+    // Thêm thông tin học kỳ
+    if (semesterQuery && semesterQuery !== "all") {
+      const semesterArray = semesterQuery.split(",");
+      fileName += `_${semesterArray.join("_")}`;
+    } else {
+      fileName += "_tat_ca_hoc_ky";
+    }
+
+    // Thêm thông tin năm học
+    if (schoolYearQuery && schoolYearQuery !== "all") {
+      const schoolYearArray = schoolYearQuery.split(",");
+      const uniqueSchoolYears = [...new Set(schoolYearArray)];
+      fileName += `_${uniqueSchoolYears.join("_")}`;
+    } else {
+      fileName += "_tat_ca_nam_hoc";
+    }
+
+    // Thêm thông tin đơn vị
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+      fileName += `_${unitArray.join("_")}`;
+    } else {
+      fileName += "_tat_ca_don_vi";
+    }
+
+    fileName += ".docx";
+
+    // Sử dụng docx đã được import ở đầu file
+    const {
+      Document,
+      Packer,
+      Paragraph,
+      TextRun,
+      Table,
+      TableRow,
+      TableCell,
+      WidthType,
+      AlignmentType,
+    } = require("docx");
+
+    // Lấy ngày tháng năm hiện tại
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    // Tạo tiêu đề phù hợp
+    let title = "Thống kê học phí";
+    let titleParts = [];
+
+    if (
+      semesterQuery &&
+      semesterQuery !== "all" &&
+      schoolYearQuery &&
+      schoolYearQuery !== "all"
+    ) {
+      const semesterArray = semesterQuery.split(",");
+      const schoolYearArray = schoolYearQuery.split(",");
+      const uniqueSchoolYears = [...new Set(schoolYearArray)];
+
+      if (uniqueSchoolYears.length === 1) {
+        titleParts.push(
+          `học kỳ ${semesterArray.join(",")} năm học ${uniqueSchoolYears[0]}`
+        );
+      } else {
+        const combined = semesterArray.map(
+          (semester, index) => `${semester} năm học ${schoolYearArray[index]}`
+        );
+        titleParts.push(`học kỳ ${combined.join(", ")}`);
+      }
+    } else {
+      if (semesterQuery && semesterQuery !== "all") {
+        titleParts.push(`học kỳ ${semesterQuery}`);
+      }
+      if (schoolYearQuery && schoolYearQuery !== "all") {
+        titleParts.push(`năm học ${schoolYearQuery}`);
+      }
+    }
+
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+      titleParts.push(`đơn vị ${unitArray.join(", ")}`);
+    }
+
+    if (titleParts.length > 0) {
+      title += ` ${titleParts.join(", ")}`;
+    }
+
+    // Tạo bảng dữ liệu đơn giản
+    const tableRows = [
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: "Đơn vị", bold: true })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: "Họ và tên", bold: true })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: "Trường Đại học", bold: true })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Loại tiền phải đóng",
+                    bold: true,
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: "Số tiền(VND)", bold: true })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: "Trạng thái", bold: true })],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+        ],
+      }),
+    ];
+
+    // Thêm dữ liệu vào bảng
+    tuitionFees.forEach((tuitionFee) => {
+      const formatCurrency = (amount) => {
+        if (!amount) return "";
+        return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      };
+
+      tableRows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: tuitionFee.unit || "",
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: tuitionFee.fullName,
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: (tuitionFee.university || "")
+                    .replace("Đại học ", "")
+                    .trim(),
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: (tuitionFee.content || "")
+                    .replace("Tổng ", "")
+                    .replace("học kỳ", "HK")
+                    .replace("học phí", "HP"),
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: formatCurrency(tuitionFee.totalAmount) || "",
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  text: tuitionFee.status || "",
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+    });
+
+    const doc = new Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            // Header
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "HỌC VIỆN KHOA HỌC QUÂN SỰ",
+                  bold: true,
+                  size: 24,
+                }),
+                new TextRun({
+                  text: "      CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+                  bold: true,
+                  size: 24,
+                }),
+              ],
+              alignment: AlignmentType.JUSTIFIED,
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "               HỆ HỌC VIÊN 5",
+                  bold: true,
+                  size: 24,
+                }),
+                new TextRun({
+                  text: "                                         Độc lập - Tự do - Hạnh phúc",
+                  bold: true,
+                  size: 24,
+                }),
+              ],
+              alignment: AlignmentType.JUSTIFIED,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Hà Nội, ngày ${day} tháng ${month} năm ${year}`,
+                  italic: true,
+                  size: 24,
+                }),
+              ],
+              alignment: AlignmentType.RIGHT,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+
+            // Tiêu đề
+            new Paragraph({
+              children: [
+                new TextRun({ text: "BÁO CÁO", bold: true, size: 28 }),
+              ],
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [new TextRun({ text: title, bold: true, size: 24 })],
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+
+            // Thống kê tổng quan
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `1. Tổng số tiền học phí: ${totalAmountSum.toLocaleString(
+                    "vi-VN",
+                    { style: "currency", currency: "VND" }
+                  )}`,
+                  bold: true,
+                  size: 24,
+                }),
+              ],
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `2. Cần thanh toán: ${unpaidAmountSum.toLocaleString(
+                    "vi-VN",
+                    { style: "currency", currency: "VND" }
+                  )}`,
+                  bold: true,
+                  size: 24,
+                }),
+              ],
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `3. Đã thanh toán: ${paidAmountSum.toLocaleString(
+                    "vi-VN",
+                    { style: "currency", currency: "VND" }
+                  )}`,
+                  bold: true,
+                  size: 24,
+                }),
+              ],
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+
+            // Bảng dữ liệu
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: tableRows,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+
+            // Chữ ký
+            new Paragraph({
+              children: [
+                new TextRun({ text: "HỆ TRƯỞNG", bold: true, size: 24 }),
+              ],
+              alignment: AlignmentType.RIGHT,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [new TextRun({ text: "Bùi Đình Thế", size: 24 })],
+              alignment: AlignmentType.RIGHT,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Lỗi tạo file Word:", error);
+
+    // Trả về JSON error để frontend có thể hiển thị thông báo
+    res.status(500).json({
+      message: "Lỗi tạo file Word: " + error.message,
+      error: error.message,
+      success: false,
+    });
+  }
+};
+
 module.exports = {
   updateCommander,
   getCommander,
@@ -5407,4 +5889,5 @@ module.exports = {
   getAvailableYears,
   getYearlyResults,
   getYearlyStatistics,
+  getWordTuitionFee,
 };

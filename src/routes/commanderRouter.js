@@ -74,6 +74,7 @@ const {
   generateAutoCutRiceForStudent,
   getAllStudentsGrades,
   getYearlyStatistics,
+  getWordTuitionFee,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -111,6 +112,7 @@ router.get("/yearlyResults", verifyToken, isAdmin, getYearlyResults);
 router.get("/learningResult/pdf", verifyToken, isAdmin, getPdfLearningResult);
 router.get("/physicalResult/pdf", verifyToken, isAdmin, getPdfPhysicalResutl);
 router.get("/tuitionFee/pdf", verifyToken, isAdmin, getPdfTuitionFee);
+router.get("/tuitionFee/word", verifyToken, isAdmin, getWordTuitionFee);
 
 //CRUD with Notifications
 router.put("/notification/:userId/:notificationId", verifyToken, updateIsRead);
