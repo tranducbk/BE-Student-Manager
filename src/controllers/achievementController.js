@@ -434,7 +434,6 @@ const getRecommendations = async (req, res) => {
       },
     };
 
-    // ===== Bổ sung logic đề xuất (suggestions) =====
     const suggestions = [];
     // Điều kiện 1: 1 năm CSTD + có đề tài/sáng kiến
     if (
@@ -577,7 +576,6 @@ const getRecommendationsByStudentId = async (req, res) => {
       },
     };
 
-    // ===== Bổ sung logic đề xuất (suggestions) =====
     const suggestions = [];
     // Điều kiện 1: 1 năm CSTD + có đề tài/sáng kiến
     if (

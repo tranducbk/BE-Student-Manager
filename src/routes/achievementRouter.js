@@ -14,7 +14,7 @@ const {
   getRecommendationsByStudentId,
 } = require("../controllers/achievementController");
 
-// Routes cho admin (phải đặt trước user routes để tránh conflict)
+// Routes cho admin
 // Lấy danh sách tất cả achievement
 router.get("/admin/all", verifyToken, isAdmin, getAllAchievements);
 

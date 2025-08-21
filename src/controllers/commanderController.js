@@ -43,6 +43,66 @@ const getCommander = async (req, res) => {
   }
 };
 
+// Update tuition fee status
+const updateTuitionFeeStatus = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.studentId);
+    if (!student)
+      return res.status(404).json({ message: "Không tìm thấy học viên" });
+
+    const fee = student.tuitionFee.id(req.params.tuitionFeeId);
+    if (!fee)
+      return res.status(404).json({ message: "Không tìm thấy học phí" });
+
+    const { status } = req.body;
+    if (
+      !status ||
+      !["Đã thanh toán", "Chưa thanh toán", "Đã đóng", "Chưa đóng"].includes(
+        status
+      )
+    ) {
+      return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+    }
+
+    fee.status = status;
+    await student.save();
+
+    // Tạo thông báo tới học viên về thay đổi trạng thái học phí
+    try {
+      const title = "Cập nhật trạng thái học phí";
+      const docContent = `Trạng thái học phí đã được cập nhật.\n\n- Học kỳ: ${
+        fee.semester || "-"
+      }\n- Năm học: ${fee.schoolYear || "-"}\n- Loại tiền: ${
+        fee.content || "-"
+      }\n- Số tiền: ${fee.totalAmount || "-"}\n- Trạng thái mới: ${status}`;
+
+      const doc = new RegulatoryDocument({
+        title,
+        content: docContent,
+        dateIssued: new Date(),
+        author: "Hệ Học viên 5",
+        attachments: "",
+      });
+      await doc.save();
+
+      await StudentNotifications.create({
+        studentId: student._id,
+        notificationId: doc._id,
+        isRead: false,
+      });
+    } catch (notifyErr) {
+      console.warn(
+        "Không thể tạo thông báo học phí:",
+        notifyErr?.message || notifyErr
+      );
+    }
+
+    return res.status(200).json({ message: "Cập nhật trạng thái thành công" });
+  } catch (e) {
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 const getStudents = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const skip = (page - 1) * limit;
@@ -5890,4 +5950,5 @@ module.exports = {
   getYearlyResults,
   getYearlyStatistics,
   getWordTuitionFee,
+  updateTuitionFeeStatus,
 };

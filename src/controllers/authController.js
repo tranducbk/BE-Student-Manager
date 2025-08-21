@@ -4,6 +4,7 @@ require("dotenv").config();
 const User = require("../models/user");
 const Student = require("../models/student");
 const Commander = require("../models/commander");
+const { createLog } = require("../services/logServices");
 
 const Register = async (req, res) => {
   try {
