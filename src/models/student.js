@@ -65,6 +65,10 @@ const semesterResultSchema = new mongoose.Schema({
   cumulativeGrade4: { type: Number, default: 0 }, // Điểm tích lũy hệ 4
   cumulativeGrade10: { type: Number, default: 0 }, // Điểm tích lũy hệ 10
 
+  // Thống kê nợ theo học kỳ
+  debtCredits: { type: Number, default: 0 }, // Tổng số tín chỉ nợ (môn F hoặc hệ 4 = 0)
+  failedSubjects: { type: Number, default: 0 }, // Số môn nợ (F)
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -101,6 +105,7 @@ const yearlyResultSchema = new mongoose.Schema({
   totalSubjects: { type: Number, default: 0 }, // Tổng số môn học
   passedSubjects: { type: Number, default: 0 }, // Số môn đạt
   failedSubjects: { type: Number, default: 0 }, // Số môn không đạt
+  debtCredits: { type: Number, default: 0 }, // Tổng số tín chỉ nợ của cả năm
 
   // Trạng thái học tập theo năm
   academicStatus: {

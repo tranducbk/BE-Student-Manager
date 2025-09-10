@@ -158,6 +158,24 @@ const calculateAverageGrade10 = (subjects) => {
   return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
 };
 
+// Tổng tín chỉ nợ trong danh sách môn
+const calculateDebtCredits = (subjects) => {
+  if (!subjects || subjects.length === 0) return 0;
+
+  return subjects.reduce((sum, s) => {
+    const credits = s.credits || 0;
+    const isDebt = s.letterGrade === "F" || s.gradePoint4 === 0;
+    return sum + (isDebt ? credits : 0);
+  }, 0);
+};
+
+// Số môn nợ (điểm F hoặc hệ 4 = 0)
+const calculateFailedSubjects = (subjects) => {
+  if (!subjects || subjects.length === 0) return 0;
+  return subjects.filter((s) => s.letterGrade === "F" || s.gradePoint4 === 0)
+    .length;
+};
+
 // Tính điểm trung bình hệ 10 cho học kỳ dựa trên GPA hệ 4 và công thức tuyến tính
 const calculateSemesterAverage10FromGpa4 = (averageGrade4) => {
   return grade4ToGrade10(averageGrade4);
@@ -248,6 +266,9 @@ const updateSemesterResult = (semesterResult) => {
   semesterResult.averageGrade10 = calculateSemesterAverage10FromGpa4(
     semesterResult.averageGrade4
   );
+  // Cập nhật nợ
+  semesterResult.debtCredits = calculateDebtCredits(subjects);
+  semesterResult.failedSubjects = calculateFailedSubjects(subjects);
   semesterResult.updatedAt = new Date();
 
   return semesterResult;
@@ -334,6 +355,8 @@ module.exports = {
   grade10ToGrade4,
   calculateAverageGrade4,
   calculateAverageGrade10,
+  calculateDebtCredits,
+  calculateFailedSubjects,
   calculateSemesterAverage10FromGpa4,
   calculateTotalCredits,
   calculateCumulativeGrade4,

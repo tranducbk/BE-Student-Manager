@@ -74,8 +74,15 @@ const {
   generateAutoCutRiceForStudent,
   getAllStudentsGrades,
   getYearlyStatistics,
+  getPartyRatings,
+  getTrainingRatings,
   getWordTuitionFee,
   updateTuitionFeeStatus,
+  getGraduatedStudents,
+  getAllStudents,
+  getEnrollmentYears,
+  getSchoolYears,
+  bulkUpdateGraduationDate,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -272,6 +279,8 @@ router.put(
 router.post("/learningResults", verifyToken, isAdmin, getLearningResults);
 router.get("/allStudentsGrades", verifyToken, isAdmin, getAllStudentsGrades);
 router.get("/yearlyStatistics", verifyToken, isAdmin, getYearlyStatistics);
+router.get("/partyRatings", verifyToken, isAdmin, getPartyRatings);
+router.get("/trainingRatings", verifyToken, isAdmin, getTrainingRatings);
 router.get(
   "/learningResultBySemester",
   verifyToken,
@@ -306,6 +315,18 @@ router.get("/learningResultAll", verifyToken, isAdmin, getLearningResultAll);
 router.get("/timeTables", verifyToken, isAdmin, getTimeTables);
 router.get("/:studentId/timeTable", verifyToken, isAdmin, getTimeTable);
 router.get("/cutRice/:cutRiceId", verifyToken, getCutRiceDetail);
+
+// Routes cho cập nhật đồng loạt ngày ra trường
+router.get("/graduatedStudents", verifyToken, isAdmin, getGraduatedStudents);
+router.get("/allStudents", verifyToken, isAdmin, getAllStudents);
+router.get("/enrollmentYears", verifyToken, isAdmin, getEnrollmentYears);
+router.get("/schoolYears", verifyToken, isAdmin, getSchoolYears);
+router.put(
+  "/bulkUpdateGraduationDate",
+  verifyToken,
+  isAdmin,
+  bulkUpdateGraduationDate
+);
 
 //CRUD with commander
 router.delete("/:commanderId", verifyToken, isAdmin, deleteCommander);

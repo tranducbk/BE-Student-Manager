@@ -204,6 +204,8 @@ const addSemesterGrades = async (req, res) => {
       totalCredits: gradeHelper.calculateTotalCredits(processedSubjects),
       averageGrade4: gradeHelper.calculateAverageGrade4(processedSubjects),
       averageGrade10: gradeHelper.calculateAverageGrade10(processedSubjects),
+      debtCredits: gradeHelper.calculateDebtCredits(processedSubjects),
+      failedSubjects: gradeHelper.calculateFailedSubjects(processedSubjects),
       cumulativeCredits: 0,
       cumulativeGrade4: 0,
       cumulativeGrade10: 0,
@@ -306,6 +308,10 @@ const updateSemesterGrades = async (req, res) => {
       gradeHelper.calculateAverageGrade4(processedSubjects);
     user.student.semesterResults[semesterIndex].averageGrade10 =
       gradeHelper.calculateAverageGrade10(processedSubjects);
+    user.student.semesterResults[semesterIndex].debtCredits =
+      gradeHelper.calculateDebtCredits(processedSubjects);
+    user.student.semesterResults[semesterIndex].failedSubjects =
+      gradeHelper.calculateFailedSubjects(processedSubjects);
     user.student.semesterResults[semesterIndex].updatedAt = new Date();
 
     // Cập nhật điểm tích lũy cho tất cả học kỳ
@@ -1007,6 +1013,31 @@ const recalculateAllYearlyResults = async (student) => {
       yearlyTotalGradePoints10 += grade10 * credits;
       semesterIds.push(semester._id);
 
+      // Cập nhật nợ cho từng học kỳ trong quá trình duyệt
+      const subjects = semester.subjects || [];
+      semester.debtCredits = gradeHelper.calculateDebtCredits(subjects);
+      semester.failedSubjects = gradeHelper.calculateFailedSubjects(subjects);
+      console.log(
+        "semester.failedSubjects",
+        semester.failedSubjects,
+        semester.debtCredits
+      );
+      try {
+        const debugSubjects = subjects.map((s) => ({
+          subjectCode: s.subjectCode,
+          letterGrade: s.letterGrade,
+          credits: s.credits,
+          gradePoint4: s.gradePoint4,
+          gradePoint10: s.gradePoint10,
+        }));
+        console.log(
+          `[YearlyCalc] ${schoolYear} - ${semester.semester}: debtCredits=${semester.debtCredits}, failedSubjects=${semester.failedSubjects}`
+        );
+        console.log(`[YearlyCalc] Subjects:`, JSON.stringify(debugSubjects));
+      } catch (e) {
+        console.log(`[YearlyCalc] Log error:`, e?.message);
+      }
+
       console.log(
         `  ${semester.semester}: ${credits} TC, GPA: ${grade4.toFixed(
           2
@@ -1056,6 +1087,13 @@ const recalculateAllYearlyResults = async (student) => {
     ).length;
     const failedSubjects = totalSubjects - passedSubjects;
 
+    // Tín chỉ nợ theo năm
+    const yearDebtCredits = allSubjects.reduce((sum, s) => {
+      const c = s.credits || 0;
+      const isDebt = s.letterGrade === "F" || s.gradePoint4 === 0;
+      return sum + (isDebt ? c : 0);
+    }, 0);
+
     // Xác định trạng thái học tập (chỉ dựa trên GPA năm học)
     let academicStatus = "Trung bình";
     if (yearlyGrade10 >= 8.0) academicStatus = "Tốt";
@@ -1065,6 +1103,10 @@ const recalculateAllYearlyResults = async (student) => {
     else academicStatus = "Kém";
 
     // Tạo hoặc cập nhật yearlyResult
+    console.log(
+      `[YearlyCalc] Year ${schoolYear}: totalSubjects=${totalSubjects}, failedSubjects=${failedSubjects}, debtCredits=${yearDebtCredits}`
+    );
+
     const yearlyResult = {
       schoolYear: schoolYear,
       semesters: yearSemesters, // Lưu toàn bộ dữ liệu học kỳ trong năm
@@ -1077,6 +1119,7 @@ const recalculateAllYearlyResults = async (student) => {
       totalSubjects: totalSubjects,
       passedSubjects: passedSubjects,
       failedSubjects: failedSubjects,
+      debtCredits: yearDebtCredits,
       academicStatus: academicStatus,
       semesterCount: yearSemesters.length,
       semesterIds: semesterIds, // Vẫn giữ lại để tương thích
