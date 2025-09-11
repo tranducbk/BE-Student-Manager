@@ -25,6 +25,7 @@ const VacationSchedule = require("../models/vacation_schedule");
 const Violation = require("../models/violation");
 const RegulatoryDocument = require("../models/regulatory_document");
 const StudentNotifications = require("../models/student_notifications");
+const TimeTable = require("../models/time_table");
 
 const limit = 10;
 
@@ -6498,6 +6499,862 @@ const bulkUpdateGraduationDate = async (req, res) => {
   }
 };
 
+const getExcelPoliticalManagement = async (req, res) => {
+  try {
+    const { schoolYear } = req.query;
+
+    if (!schoolYear) {
+      return res.status(400).json({
+        success: false,
+        message: "Năm học không được để trống",
+      });
+    }
+
+    // Sử dụng logic lọc giống như frontend
+    const startYear = parseInt(schoolYear.split("-")[0]);
+
+    // Query giống như trong getStudents
+    const query = {
+      $and: [
+        { enrollment: { $lte: startYear } }, // Vào trước/đúng startYear
+        {
+          $or: [
+            { graduationDate: { $exists: false } },
+            { graduationDate: null },
+            { graduationDate: { $gt: new Date(startYear, 11, 31) } }, // Chưa ra trường hoặc ra trường sau 31/12/startYear
+          ],
+        },
+      ],
+    };
+
+    console.log(`=== DEBUG: Tìm kiếm sinh viên cho năm học ${schoolYear} ===`);
+    console.log(`- Start Year: ${startYear}`);
+    console.log(`- Query:`, JSON.stringify(query, null, 2));
+
+    const students = await Student.find(query)
+      .populate("university", "universityName")
+      .populate("organization", "organizationName")
+      .populate("educationLevel", "levelName")
+      .populate("class", "className")
+      .populate("achievement")
+      .sort({ studentId: 1 });
+
+    console.log(
+      `Tìm thấy ${students.length} sinh viên cho năm học ${schoolYear}`
+    );
+
+    // Log chi tiết từng sinh viên
+    students.forEach((student, index) => {
+      console.log(`\n--- Sinh viên ${index + 1}: ${student.fullName} ---`);
+      console.log(`- Student ID: ${student.studentId}`);
+      console.log(`- Enrollment: ${student.enrollment}`);
+      console.log(
+        `- Graduation Date: ${student.graduationDate || "Chưa ra trường"}`
+      );
+      console.log(`- Unit: ${student.unit}`);
+    });
+
+    if (students.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Không tìm thấy sinh viên nào trong năm học ${schoolYear}. Sinh viên phải vào trước/đúng năm ${startYear} và chưa ra trường hoặc ra trường sau 31/12/${startYear}`,
+      });
+    }
+
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Quản lý chính trị nội bộ");
+
+    worksheet.properties.defaultRowHeight = 25;
+
+    const titleRow = worksheet.addRow([
+      `Quản lý chính trị nội bộ Hệ học viên 5 - Năm học ${schoolYear}`,
+    ]);
+    titleRow.height = 30;
+    worksheet.mergeCells("A1:U1");
+    titleRow.getCell(1).font = {
+      name: "Times New Roman",
+      size: 14,
+      bold: true,
+    };
+    titleRow.getCell(1).alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    worksheet.addRow([]);
+
+    const headerRow1 = worksheet.addRow([
+      "STT",
+      "Đơn vị",
+      "Họ tên\nNgày sinh\nQuê quán\nNơi ở hiện nay",
+      "Cấp bậc",
+      "Gia đình",
+      "Nhập ngũ",
+      "Dân tộc",
+      "Tôn giáo",
+      "Mối quan hệ có yếu tố nước ngoài",
+      "Đảng",
+      "",
+      "Xếp loại Đảng viên",
+      "",
+      "",
+      "",
+      "Khen thưởng",
+      "",
+      "",
+      "",
+      "Xếp loại rèn luyện",
+    ]);
+
+    const headerRow2 = worksheet.addRow([
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "Vào Đảng",
+      "Chính thức",
+      "Tốt",
+      "Hoàn thành",
+      "Không hoàn thành",
+      "Xuất sắc",
+      "CSTT",
+      "CSTĐ",
+      "BK BQP",
+      "CSTĐ TQ",
+      "Xếp loại rèn luyện",
+    ]);
+
+    worksheet.mergeCells("A3:A4");
+    worksheet.mergeCells("B3:B4");
+    worksheet.mergeCells("C3:C4");
+    worksheet.mergeCells("D3:D4");
+    worksheet.mergeCells("E3:E4");
+    worksheet.mergeCells("F3:F4");
+    worksheet.mergeCells("G3:G4");
+    worksheet.mergeCells("H3:H4");
+    worksheet.mergeCells("I3:I4");
+    worksheet.mergeCells("J3:K3");
+    worksheet.mergeCells("L3:O3");
+    worksheet.mergeCells("P3:S3");
+    worksheet.mergeCells("T3:T4");
+
+    const headerStyle = {
+      font: { name: "Times New Roman", size: 12, bold: true },
+      alignment: { horizontal: "center", vertical: "middle" },
+      border: {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      },
+    };
+
+    headerRow1.eachCell((cell, colNumber) => {
+      cell.font = headerStyle.font;
+      cell.alignment = { ...headerStyle.alignment, wrapText: true };
+      cell.border = headerStyle.border;
+    });
+
+    headerRow2.eachCell((cell, colNumber) => {
+      cell.font = headerStyle.font;
+      cell.alignment = { ...headerStyle.alignment, wrapText: true };
+      cell.border = headerStyle.border;
+    });
+
+    // Sắp xếp sinh viên theo đơn vị từ L1-H5 đến L6-H5
+    students.sort((a, b) => {
+      const unitOrder = {
+        "L1 - H5": 1,
+        "L2 - H5": 2,
+        "L3 - H5": 3,
+        "L4 - H5": 4,
+        "L5 - H5": 5,
+        "L6 - H5": 6,
+      };
+      const unitA = unitOrder[a.unit] || 999;
+      const unitB = unitOrder[b.unit] || 999;
+      if (unitA !== unitB) return unitA - unitB;
+
+      // Nếu cùng đơn vị, sắp xếp theo tên
+      return a.fullName.localeCompare(b.fullName, "vi");
+    });
+
+    console.log("\n=== THỨ TỰ SẮP XẾP SINH VIÊN ===");
+    students.forEach((student, index) => {
+      console.log(`${index + 1}. ${student.fullName} - ${student.unit}`);
+    });
+
+    students.forEach((student, index) => {
+      // Tìm yearlyResult cho năm học cụ thể
+      let yearlyResult = student.yearlyResults.find(
+        (yr) => yr.schoolYear === schoolYear
+      );
+
+      // Nếu không tìm thấy, lấy yearlyResult gần nhất
+      if (!yearlyResult && student.yearlyResults.length > 0) {
+        yearlyResult = student.yearlyResults.sort((a, b) =>
+          b.schoolYear.localeCompare(a.schoolYear)
+        )[0];
+        console.log(
+          `⚠️ Không tìm thấy yearlyResult cho ${schoolYear}, sử dụng ${yearlyResult.schoolYear}`
+        );
+      }
+
+      const achievement = student.achievement;
+
+      console.log(`\n--- Sinh viên ${index + 1}: ${student.fullName} ---`);
+      console.log(`- Yearly Result cho ${schoolYear}:`, yearlyResult);
+      console.log(`- Achievement:`, achievement);
+      console.log(`- Party Rating:`, yearlyResult?.partyRating);
+      console.log(`- Training Rating:`, yearlyResult?.trainingRating);
+
+      const familyInfo = student.familyMembers
+        .map(
+          (member) =>
+            `${member.relationship}: ${member.fullName}, ${new Date(
+              member.birthday
+            ).getFullYear()}, ${member.occupation}`
+        )
+        .join("; ");
+
+      const foreignInfo = student.foreignRelations
+        .map(
+          (relation) =>
+            `${relation.relationship}: ${relation.fullName}, ${relation.country}. ${relation.reason}, Quốc tịch: ${relation.nationality}`
+        )
+        .join("\n");
+
+      const partyJoinDate = student.probationaryPartyMember
+        ? new Date(student.probationaryPartyMember).toLocaleDateString("vi-VN")
+        : "Chưa có dữ liệu";
+      const partyOfficialDate = student.fullPartyMember
+        ? new Date(student.fullPartyMember).toLocaleDateString("vi-VN")
+        : "Chưa có dữ liệu";
+
+      const partyRating = yearlyResult?.partyRating?.rating || "";
+      const trainingRating = yearlyResult?.trainingRating || "";
+
+      console.log(`- Thông tin Đảng:`);
+      console.log(
+        `  + Vào Đảng: ${student.probationaryPartyMember} -> ${partyJoinDate}`
+      );
+      console.log(
+        `  + Chính thức: ${student.fullPartyMember} -> ${partyOfficialDate}`
+      );
+      console.log(`  + Xếp loại Đảng viên: ${partyRating}`);
+      console.log(`  + Xếp loại rèn luyện: ${trainingRating}`);
+
+      let cstt = "",
+        cstd = "",
+        bkBqp = "",
+        cstdTq = "";
+
+      console.log(`- Yearly Achievements:`, achievement?.yearlyAchievements);
+
+      if (achievement && achievement.yearlyAchievements) {
+        const targetYear = parseInt(schoolYear.split("-")[0]);
+        let currentYearAchievement = achievement.yearlyAchievements.find(
+          (ya) => ya.year === targetYear
+        );
+
+        // Nếu không tìm thấy achievement cho năm cụ thể, lấy năm gần nhất
+        if (
+          !currentYearAchievement &&
+          achievement.yearlyAchievements.length > 0
+        ) {
+          currentYearAchievement = achievement.yearlyAchievements.sort(
+            (a, b) => b.year - a.year
+          )[0];
+          console.log(
+            `⚠️ Không tìm thấy achievement cho năm ${targetYear}, sử dụng năm ${currentYearAchievement.year}`
+          );
+        }
+
+        console.log(
+          `- Current Year Achievement (${targetYear}):`,
+          currentYearAchievement
+        );
+
+        if (currentYearAchievement) {
+          if (currentYearAchievement.title === "Chiến sĩ tiên tiến") cstt = "X";
+          if (currentYearAchievement.title === "Chiến sĩ thi đua") cstd = "X";
+          if (currentYearAchievement.hasMinistryReward) bkBqp = "X";
+          if (currentYearAchievement.hasNationalReward) cstdTq = "X";
+        }
+      }
+
+      console.log(
+        `- Khen thưởng: CSTT=${cstt}, CSTĐ=${cstd}, BK BQP=${bkBqp}, CSTĐ TQ=${cstdTq}`
+      );
+
+      // Tạo thông tin cá nhân với xuống dòng
+      const personalInfo = `${student.fullName}\n${
+        student.birthday
+          ? new Date(student.birthday).toLocaleDateString("vi-VN")
+          : ""
+      }\n${student.hometown || ""}\n${student.currentAddress || ""}`;
+
+      // Ngày nhập ngũ (ngày vào trường)
+      const enlistmentDate = student.enrollment
+        ? `01/09/${student.enrollment}`
+        : "Chưa có dữ liệu";
+
+      const dataRow = worksheet.addRow([
+        index + 1,
+        student.unit || "",
+        personalInfo,
+        student.rank || "",
+        familyInfo,
+        enlistmentDate,
+        student.ethnicity || "",
+        student.religion || "Không",
+        foreignInfo,
+        partyJoinDate,
+        partyOfficialDate,
+        partyRating === "HTXSNV" ? "X" : "",
+        partyRating === "HTTNV" ? "X" : "",
+        partyRating === "KHTNV" ? "X" : "",
+        partyRating === "HTXSNV" ? "X" : "", // Xuất sắc
+        cstt,
+        cstd,
+        bkBqp,
+        cstdTq,
+        trainingRating,
+      ]);
+
+      dataRow.eachCell((cell, colNumber) => {
+        cell.font = { name: "Times New Roman", size: 12 };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = headerStyle.border;
+      });
+
+      dataRow.getCell(3).alignment = {
+        horizontal: "left",
+        vertical: "middle",
+        wrapText: true,
+      };
+      dataRow.getCell(5).alignment = {
+        horizontal: "left",
+        vertical: "middle",
+        wrapText: true,
+      };
+      dataRow.getCell(9).alignment = {
+        horizontal: "left",
+        vertical: "middle",
+        wrapText: true,
+      };
+    });
+
+    worksheet.columns = [
+      { width: 5 }, // STT
+      { width: 10 }, // Đơn vị
+      { width: 35 }, // Họ tên/Ngày sinh/Quê quán/Nơi ở
+      { width: 12 }, // Cấp bậc
+      { width: 30 }, // Gia đình
+      { width: 12 }, // Nhập ngũ
+      { width: 10 }, // Dân tộc
+      { width: 10 }, // Tôn giáo
+      { width: 25 }, // Mối quan hệ có yếu tố nước ngoài
+      { width: 12 }, // Vào Đảng
+      { width: 12 }, // Chính thức
+      { width: 8 }, // Tốt
+      { width: 12 }, // Hoàn thành
+      { width: 15 }, // Không hoàn thành
+      { width: 10 }, // Xuất sắc
+      { width: 8 }, // CSTT
+      { width: 8 }, // CSTĐ
+      { width: 8 }, // BK BQP
+      { width: 8 }, // CSTĐ TQ
+      { width: 15 }, // Xếp loại rèn luyện
+    ];
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="quan-ly-chinh-tri-noi-bo-${schoolYear}.xlsx"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Lỗi khi xuất Excel quản lý chính trị nội bộ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi xuất file Excel",
+    });
+  }
+};
+
+const getAvailableSchoolYearsForPoliticalManagement = async (req, res) => {
+  try {
+    const allStudents = await Student.find({});
+
+    const schoolYears = new Set();
+
+    allStudents.forEach((student) => {
+      // Lấy từ yearlyResults
+      if (student.yearlyResults && student.yearlyResults.length > 0) {
+        student.yearlyResults.forEach((yr) => {
+          if (yr.schoolYear) {
+            schoolYears.add(yr.schoolYear);
+          }
+        });
+      }
+
+      // Lấy từ enrollment year
+      if (student.enrollment) {
+        const enrollmentYear = student.enrollment.toString();
+        schoolYears.add(`${enrollmentYear}-${parseInt(enrollmentYear) + 1}`);
+      }
+    });
+
+    const sortedSchoolYears = Array.from(schoolYears).sort().reverse();
+
+    res.json({
+      success: true,
+      schoolYears: sortedSchoolYears,
+      totalStudents: allStudents.length,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách năm học:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy danh sách năm học",
+    });
+  }
+};
+
+const getExcelTimeTableWithCutRice = async (req, res) => {
+  try {
+    const { unit } = req.query;
+
+    // Sử dụng API có sẵn để lấy dữ liệu lịch học (đã được xử lý sẵn)
+    const timeTableQuery = unit ? { unit } : {};
+    const timeTableData = await TimeTable.find(timeTableQuery)
+      .populate({
+        path: "studentId",
+        select: "fullName unit university organization educationLevel",
+        populate: [
+          { path: "university", select: "universityName" },
+          { path: "organization", select: "organizationName travelTime" },
+          { path: "educationLevel", select: "levelName" },
+        ],
+      })
+      .sort({ unit: 1, "studentId.fullName": 1 });
+
+    // Tạo workbook và worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Thời khóa biểu");
+
+    // 1) Tiêu đề chính - đưa lên hàng 1, hàng 2 trống
+    worksheet.mergeCells("A1:J1");
+    const titleCell = worksheet.getCell("A1");
+    titleCell.value = "Thời khóa biểu năm học 2024-2025";
+    titleCell.font = { name: "Times New Roman", size: 14, bold: true };
+    titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+    // 2) Thêm một dòng trống ở hàng 2
+    worksheet.addRow([]);
+
+    // 3) Header row 3 (nhóm lớn)
+    const headerRow3 = worksheet.addRow([
+      "STT",
+      "Đơn vị",
+      "Họ tên",
+      "Thứ",
+      "Lịch học",
+      "",
+      "",
+      "Cắt cơm",
+      "",
+      "",
+    ]);
+
+    // 4) Header row 4 (subheaders)
+    const headerRow4 = worksheet.addRow([
+      "",
+      "",
+      "",
+      "",
+      "Môn học",
+      "Thời gian",
+      "Địa điểm",
+      "Sáng",
+      "Trưa",
+      "Chiều",
+    ]);
+
+    // 5) Merge cells theo yêu cầu
+    worksheet.mergeCells("A3:A4"); // STT
+    worksheet.mergeCells("B3:B4"); // Đơn vị
+    worksheet.mergeCells("C3:C4"); // Họ tên
+    worksheet.mergeCells("D3:D4"); // Thứ
+    worksheet.mergeCells("E3:G3"); // Lịch học
+    worksheet.mergeCells("H3:J3"); // Cắt cơm
+
+    // 6) Set column widths
+    worksheet.columns = [
+      { width: 6 }, // A: STT
+      { width: 12 }, // B: Đơn vị
+      { width: 36 }, // C: Họ tên
+      { width: 6 }, // D: Thứ
+      { width: 28 }, // E: Môn học
+      { width: 16 }, // F: Thời gian
+      { width: 12 }, // G: Địa điểm
+      { width: 8 }, // H: Sáng
+      { width: 8 }, // I: Trưa
+      { width: 8 }, // J: Chiều
+    ];
+
+    // 7) Style cho headers
+    const headerStyle = {
+      font: { name: "Times New Roman", size: 12, bold: true },
+      alignment: { horizontal: "center", vertical: "middle", wrapText: true },
+      border: {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      },
+    };
+
+    // Set row heights cho header (độ cao hợp lý)
+    worksheet.getRow(3).height = 20; // Header chính
+    worksheet.getRow(4).height = 18; // Subheader
+
+    headerRow3.eachCell((cell) => {
+      cell.font = headerStyle.font;
+      cell.alignment = headerStyle.alignment;
+      cell.border = headerStyle.border;
+    });
+
+    headerRow4.eachCell((cell) => {
+      cell.font = headerStyle.font;
+      cell.alignment = headerStyle.alignment;
+      cell.border = headerStyle.border;
+    });
+
+    // Nhóm dữ liệu theo sinh viên - bao gồm cả sinh viên chỉ có lịch cắt cơm
+    const studentsMap = new Map();
+
+    // Xử lý dữ liệu lịch học
+    timeTableData.forEach((item) => {
+      const key = String(item.studentId._id);
+      if (!studentsMap.has(key)) {
+        studentsMap.set(key, {
+          studentId: key,
+          fullName: item.studentId.fullName,
+          unit: item.studentId.unit,
+          university: item.studentId.university,
+          organization: item.studentId.organization,
+          educationLevel: item.studentId.educationLevel,
+          schedules: [],
+          cutRice: null,
+        });
+      }
+
+      // Thêm tất cả schedules từ item.schedules - chuyển đổi thành plain object
+      if (item.schedules && item.schedules.length > 0) {
+        item.schedules.forEach((schedule) => {
+          // Chuyển đổi Mongoose subdocument thành plain object
+          const plainSchedule = schedule.toObject
+            ? schedule.toObject()
+            : schedule;
+          studentsMap.get(key).schedules.push({
+            ...plainSchedule,
+            studentId: key,
+            fullName: item.studentId.fullName,
+            unit: item.studentId.unit,
+          });
+        });
+      }
+    });
+
+    // Không thêm sinh viên chỉ có lịch cắt cơm (chỉ xử lý sinh viên có lịch học)
+
+    // Xử lý dữ liệu cắt cơm - gọi API getAllCutRice
+
+    // Gọi function getAllCutRice để lấy dữ liệu cắt cơm
+    try {
+      // Tạo mock request object
+      const mockReq = {
+        query: unit ? { unit } : {},
+      };
+
+      // Tạo mock response object
+      let cutRices = [];
+      const mockRes = {
+        status: (code) => ({
+          json: (data) => {
+            cutRices = data;
+
+            return mockRes;
+          },
+        }),
+      };
+
+      // Gọi function getAllCutRice
+      await getAllCutRice(mockReq, mockRes);
+
+      // Gán dữ liệu cắt cơm cho sinh viên trong studentsMap
+      let assignedCount = 0;
+      cutRices.forEach((cutRice) => {
+        const sid = String(cutRice.studentId);
+
+        if (studentsMap.has(sid)) {
+          studentsMap.get(sid).cutRice = cutRice;
+          assignedCount++;
+        } else {
+        }
+      });
+    } catch (error) {}
+
+    // Lọc và sắp xếp sinh viên - chỉ hiển thị sinh viên có lịch học
+    const students = Array.from(studentsMap.values())
+      .filter((student) => student.schedules.length > 0) // Chỉ lấy sinh viên có lịch học
+      .sort((a, b) => {
+        const unitOrder = {
+          "L1 - H5": 1,
+          "L2 - H5": 2,
+          "L3 - H5": 3,
+          "L4 - H5": 4,
+          "L5 - H5": 5,
+          "L6 - H5": 6,
+        };
+        const unitA = unitOrder[a.unit] || 999;
+        const unitB = unitOrder[b.unit] || 999;
+        if (unitA !== unitB) return unitA - unitB;
+        return a.fullName.localeCompare(b.fullName, "vi");
+      });
+
+    let rowIndex = 5; // Dữ liệu bắt đầu từ row 5
+    let studentIndex = 1;
+
+    students.forEach((student) => {
+      // Sắp xếp lịch học theo thứ
+      const dayOrder = {
+        "Thứ 2": 1,
+        "Thứ 3": 2,
+        "Thứ 4": 3,
+        "Thứ 5": 4,
+        "Thứ 6": 5,
+        "Thứ 7": 6,
+        "Chủ nhật": 7,
+      };
+      student.schedules.sort(
+        (a, b) => (dayOrder[a.day] || 999) - (dayOrder[b.day] || 999)
+      );
+
+      const startRowIndex = rowIndex;
+
+      // Chỉ xử lý sinh viên có lịch học (không tạo fake schedules)
+
+      // Nhóm nhiều môn cùng một "Thứ" và gộp cột Thứ + Cắt cơm
+      let scheduleIndex = 0;
+      while (scheduleIndex < student.schedules.length) {
+        const groupDay = student.schedules[scheduleIndex].day || "";
+        const groupStartRow = rowIndex;
+
+        // Tính độ dài nhóm cùng ngày
+        let j = scheduleIndex;
+        while (
+          j < student.schedules.length &&
+          (student.schedules[j].day || "") === groupDay
+        ) {
+          j++;
+        }
+        const groupEndExclusive = j; // không bao gồm j
+
+        // Sắp xếp các môn trong cùng một ngày theo thời gian bắt đầu tăng dần
+        const getStartMinutes = (timeStr) => {
+          if (!timeStr || typeof timeStr !== "string") return 24 * 60;
+          // Định dạng kỳ vọng: "HH:MM - HH:MM"
+          const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})/);
+          if (!match) return 24 * 60;
+          const hour = parseInt(match[1], 10);
+          const minute = parseInt(match[2], 10);
+          return hour * 60 + minute;
+        };
+        const groupSchedules = student.schedules
+          .slice(scheduleIndex, groupEndExclusive)
+          .sort((a, b) => getStartMinutes(a.time) - getStartMinutes(b.time));
+
+        // Tính cắt cơm cho ngày này (ghi một lần cho cả nhóm)
+        let cutRiceForDay = { breakfast: "", lunch: "", dinner: "" };
+        if (student.cutRice && groupDay) {
+          const dayKey = groupDay.toLowerCase().replace(" ", "");
+          const dayMapping = {
+            thứ2: "monday",
+            thứ3: "tuesday",
+            thứ4: "wednesday",
+            thứ5: "thursday",
+            thứ6: "friday",
+            thứ7: "saturday",
+            chủnhật: "sunday",
+          };
+          const day = dayMapping[dayKey];
+          if (day && typeof student.cutRice === "object") {
+            const source = Array.isArray(student.cutRice)
+              ? student.cutRice[0]
+              : student.cutRice;
+            if (source && source[day]) {
+              cutRiceForDay.breakfast = source[day].breakfast ? "X" : "";
+              cutRiceForDay.lunch = source[day].lunch ? "X" : "";
+              cutRiceForDay.dinner = source[day].dinner ? "X" : "";
+            }
+          }
+        }
+
+        // Ghi từng môn trong nhóm
+        for (let idx = 0; idx < groupSchedules.length; idx++) {
+          const schedule = groupSchedules[idx];
+          const isFirstInGroup = idx === 0;
+
+          let studentInfo = "";
+          if (isFirstInGroup) {
+            console.log("student123", student);
+            const universityName =
+              typeof student.university === "object" &&
+              student.university?.universityName
+                ? student.university.universityName
+                : "Chưa có thông tin";
+            const major =
+              typeof student.educationLevel === "object" &&
+              student.educationLevel?.levelName
+                ? student.educationLevel.levelName
+                : "Chưa có thông tin";
+            const organizationName =
+              typeof student.organization === "object" &&
+              student.organization?.organizationName
+                ? student.organization.organizationName
+                : "Chưa có lớp";
+            const travelTime =
+              typeof student.organization === "object" &&
+              student.organization?.travelTime
+                ? student.organization.travelTime + " phút"
+                : "Chưa có thời gian di chuyển";
+            studentInfo = `${student.fullName}\nTrình độ: ${major}\nTrường: ${universityName}\nKhoa/Viện: ${organizationName}\nThời gian di chuyển: ${travelTime}`;
+          }
+
+          // Giá trị số cho cột "Thứ" để Excel hiểu là số
+          const dayNumberMap = {
+            "Thứ 2": 2,
+            "Thứ 3": 3,
+            "Thứ 4": 4,
+            "Thứ 5": 5,
+            "Thứ 6": 6,
+            "Thứ 7": 7,
+            "Chủ nhật": 8,
+          };
+          const dayNumber = dayNumberMap[groupDay] ?? null;
+
+          const rowData = [
+            isFirstInGroup && scheduleIndex === 0
+              ? studentIndex
+              : isFirstInGroup
+              ? ""
+              : "",
+            isFirstInGroup ? student.unit : "",
+            isFirstInGroup ? studentInfo : "",
+            isFirstInGroup ? dayNumber : "",
+            schedule.subject || "",
+            schedule.time || "",
+            schedule.classroom || "",
+            isFirstInGroup ? cutRiceForDay.breakfast : "",
+            isFirstInGroup ? cutRiceForDay.lunch : "",
+            isFirstInGroup ? cutRiceForDay.dinner : "",
+          ];
+
+          const row = worksheet.addRow(rowData);
+          const rowHeight = isFirstInGroup ? 35 : 20;
+          worksheet.getRow(rowIndex).height = rowHeight;
+
+          row.eachCell((cell, colNumber) => {
+            cell.font = { name: "Times New Roman", size: 12 };
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
+            if (colNumber === 1 || colNumber === 2 || colNumber === 4) {
+              cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else if (colNumber === 3) {
+              cell.alignment = {
+                horizontal: "left",
+                vertical: "top",
+                wrapText: true,
+              };
+            } else if (
+              colNumber === 6 ||
+              colNumber === 7 ||
+              colNumber === 8 ||
+              colNumber === 9 ||
+              colNumber === 10
+            ) {
+              cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else {
+              cell.alignment = { horizontal: "left", vertical: "middle" };
+            }
+          });
+
+          rowIndex++;
+        }
+
+        // Gộp cột Thứ và cột Cắt cơm cho nhóm
+        if (groupEndExclusive - scheduleIndex > 1) {
+          const groupEndRow = rowIndex - 1;
+          worksheet.mergeCells(`D${groupStartRow}:D${groupEndRow}`); // Thứ
+          worksheet.mergeCells(`H${groupStartRow}:H${groupEndRow}`); // Sáng
+          worksheet.mergeCells(`I${groupStartRow}:I${groupEndRow}`); // Trưa
+          worksheet.mergeCells(`J${groupStartRow}:J${groupEndRow}`); // Chiều
+        }
+
+        scheduleIndex = groupEndExclusive;
+      }
+
+      // Merge cells cho thông tin sinh viên
+      if (student.schedules.length > 1) {
+        const endRowIndex = rowIndex - 1;
+        worksheet.mergeCells(`A${startRowIndex}:A${endRowIndex}`); // STT
+        worksheet.mergeCells(`B${startRowIndex}:B${endRowIndex}`); // Đơn vị
+        worksheet.mergeCells(`C${startRowIndex}:C${endRowIndex}`); // Họ tên
+      }
+
+      studentIndex++;
+    });
+
+    // Log tổng quan về dữ liệu cắt cơm
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=thoikhoabieu.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Error generating Excel:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi tạo file Excel",
+    });
+  }
+};
+
 module.exports = {
   updateCommander,
   getCommander,
@@ -6579,4 +7436,7 @@ module.exports = {
   getEnrollmentYears,
   getSchoolYears,
   bulkUpdateGraduationDate,
+  getExcelPoliticalManagement,
+  getAvailableSchoolYearsForPoliticalManagement,
+  getExcelTimeTableWithCutRice,
 };

@@ -83,6 +83,9 @@ const {
   getEnrollmentYears,
   getSchoolYears,
   bulkUpdateGraduationDate,
+  getExcelPoliticalManagement,
+  getAvailableSchoolYearsForPoliticalManagement,
+  getExcelTimeTableWithCutRice,
 } = require("../controllers/commanderController");
 
 const storage = multer.memoryStorage();
@@ -102,6 +105,25 @@ router.get(
   verifyToken,
   isAdmin,
   getExcelCutRiceWithSchedule
+);
+router.get(
+  "/political-management/excel",
+  verifyToken,
+  isAdmin,
+  getExcelPoliticalManagement
+);
+router.get(
+  "/political-management/school-years",
+  verifyToken,
+  isAdmin,
+  getAvailableSchoolYearsForPoliticalManagement
+);
+
+router.get(
+  "/time-table-with-cut-rice/excel",
+  verifyToken,
+  isAdmin,
+  getExcelTimeTableWithCutRice
 );
 
 // Update student rating
