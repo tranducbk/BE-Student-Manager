@@ -3686,7 +3686,7 @@ const generateAutoCutRiceForAllStudents = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: `Tạo lịch cắt cơm tự động hoàn tất. Thành công: ${successCount}, Lỗi: ${errorCount}`,
+      message: `Tạo lịch cắt cơm tự động hoàn tất.\nThành công: ${successCount}\nLỗi: ${errorCount}`,
       totalStudents: students.length,
       successCount,
       errorCount,

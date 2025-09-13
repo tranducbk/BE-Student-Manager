@@ -153,6 +153,20 @@ const getCommanderDutyScheduleByUserId = async (req, res) => {
 };
 const updateCommanderDutySchedule = async (req, res) => {
   try {
+    // Kiểm tra trùng ngày trực (loại trừ chính record đang được update)
+    const existingSchedule = await CommanderDutySchedule.findOne({
+      workDay: req.body.workDay,
+      _id: { $ne: req.params.id },
+    });
+
+    if (existingSchedule) {
+      return res.status(400).json({
+        message: `Đã có lịch trực cho ngày ${moment(req.body.workDay).format(
+          "DD/MM/YYYY"
+        )}. Vui lòng chọn ngày khác.`,
+      });
+    }
+
     const updatedSchedule = await CommanderDutySchedule.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -166,6 +180,19 @@ const updateCommanderDutySchedule = async (req, res) => {
 
 const createCommanderDutySchedule = async (req, res) => {
   try {
+    // Kiểm tra trùng ngày trực
+    const existingSchedule = await CommanderDutySchedule.findOne({
+      workDay: req.body.workDay,
+    });
+
+    if (existingSchedule) {
+      return res.status(400).json({
+        message: `Đã có lịch trực cho ngày ${moment(req.body.workDay).format(
+          "DD/MM/YYYY"
+        )}. Vui lòng chọn ngày khác.`,
+      });
+    }
+
     const schedule = new CommanderDutySchedule({
       fullName: req.body.fullName,
       workDay: req.body.workDay,
