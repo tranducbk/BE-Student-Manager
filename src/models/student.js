@@ -194,8 +194,11 @@ const studentSchema = mongoose.model(
     ethnicity: String,
     religion: String,
     currentAddress: String,
-    email: String,
+    placeOfBirth: String,
     phoneNumber: String,
+    email: String,
+    cccdNumber: String,
+    partyMemberCardNumber: String,
     enrollment: Number,
     graduationDate: Date,
     university: {

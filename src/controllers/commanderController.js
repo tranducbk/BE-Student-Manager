@@ -304,12 +304,15 @@ const createCommander = async (req, res) => {
       fullName,
       gender,
       birthday,
+      placeOfBirth,
       hometown,
       ethnicity,
       religion,
       currentAddress,
       email,
       phoneNumber,
+      cccd,
+      partyCardNumber,
       startWork,
       organization,
       unit,
@@ -329,12 +332,15 @@ const createCommander = async (req, res) => {
         fullName,
         gender,
         birthday,
+        placeOfBirth,
         hometown,
         ethnicity,
         religion,
         currentAddress,
         email,
         phoneNumber,
+        cccd,
+        partyCardNumber,
         startWork,
         organization,
         unit,
@@ -387,8 +393,10 @@ const createStudent = async (req, res) => {
       birthday,
       hometown,
       currentAddress,
-      email,
+      placeOfBirth,
       phoneNumber,
+      cccdNumber,
+      partyMemberCardNumber,
       enrollment,
       graduationDate,
       class: classId,
@@ -414,8 +422,10 @@ const createStudent = async (req, res) => {
       birthday,
       hometown,
       currentAddress,
-      email,
+      placeOfBirth,
       phoneNumber,
+      cccdNumber,
+      partyMemberCardNumber,
       enrollment,
       graduationDate,
       class: classId,
@@ -3768,8 +3778,10 @@ const updateStudent = async (req, res) => {
       birthday,
       hometown,
       currentAddress,
-      email,
+      placeOfBirth,
       phoneNumber,
+      cccdNumber,
+      partyMemberCardNumber,
       enrollment,
       graduationDate,
       class: newClassId,
@@ -3803,8 +3815,10 @@ const updateStudent = async (req, res) => {
       birthday,
       hometown,
       currentAddress,
-      email,
+      placeOfBirth,
       phoneNumber,
+      cccdNumber,
+      partyMemberCardNumber,
       enrollment,
       graduationDate,
       class: newClassId,
@@ -6587,7 +6601,7 @@ const getExcelPoliticalManagement = async (req, res) => {
     const headerRow1 = worksheet.addRow([
       "STT",
       "Đơn vị",
-      "Họ tên\nNgày sinh\nQuê quán\nNơi ở hiện nay",
+      "Họ tên\nNgày sinh\nQuê quán\nNơi ở hiện nay\nNơi sinh\nCCCD\nSố thẻ Đảng viên",
       "Cấp bậc",
       "Gia đình",
       "Nhập ngũ",
@@ -6619,10 +6633,10 @@ const getExcelPoliticalManagement = async (req, res) => {
       "",
       "Vào Đảng",
       "Chính thức",
+      "Xuất sắc",
       "Tốt",
       "Hoàn thành",
       "Không hoàn thành",
-      "Xuất sắc",
       "CSTT",
       "CSTĐ",
       "BK BQP",
@@ -6730,6 +6744,13 @@ const getExcelPoliticalManagement = async (req, res) => {
         )
         .join("\n");
 
+      const safeFamilyInfo =
+        familyInfo && familyInfo.trim() !== "" ? familyInfo : "Chưa có dữ liệu";
+      const safeForeignInfo =
+        foreignInfo && foreignInfo.trim() !== ""
+          ? foreignInfo
+          : "Chưa có dữ liệu";
+
       const partyJoinDate = student.probationaryPartyMember
         ? new Date(student.probationaryPartyMember).toLocaleDateString("vi-VN")
         : "Chưa có dữ liệu";
@@ -6738,7 +6759,7 @@ const getExcelPoliticalManagement = async (req, res) => {
         : "Chưa có dữ liệu";
 
       const partyRating = yearlyResult?.partyRating?.rating || "";
-      const trainingRating = yearlyResult?.trainingRating || "";
+      const trainingRating = yearlyResult?.trainingRating || "Chưa đánh giá";
 
       console.log(`- Thông tin Đảng:`);
       console.log(
@@ -6793,12 +6814,16 @@ const getExcelPoliticalManagement = async (req, res) => {
         `- Khen thưởng: CSTT=${cstt}, CSTĐ=${cstd}, BK BQP=${bkBqp}, CSTĐ TQ=${cstdTq}`
       );
 
-      // Tạo thông tin cá nhân với xuống dòng
-      const personalInfo = `${student.fullName}\n${
+      // Tạo thông tin cá nhân với xuống dòng (có fallback "Chưa có dữ liệu")
+      const personalInfo = `${student.fullName || "Chưa có dữ liệu"}\n${
         student.birthday
           ? new Date(student.birthday).toLocaleDateString("vi-VN")
-          : ""
-      }\n${student.hometown || ""}\n${student.currentAddress || ""}`;
+          : "Chưa có dữ liệu"
+      }\n${student.hometown || "Chưa có dữ liệu"}\n${
+        student.currentAddress || "Chưa có dữ liệu"
+      }\n${student.placeOfBirth || "Chưa có dữ liệu"}\n${
+        student.cccdNumber || "Chưa có dữ liệu"
+      }\n${student.partyMemberCardNumber || "Chưa có dữ liệu"}`;
 
       // Ngày nhập ngũ (ngày vào trường)
       const enlistmentDate = student.enrollment
@@ -6807,20 +6832,20 @@ const getExcelPoliticalManagement = async (req, res) => {
 
       const dataRow = worksheet.addRow([
         index + 1,
-        student.unit || "",
+        student.unit || "Chưa có dữ liệu",
         personalInfo,
-        student.rank || "",
-        familyInfo,
+        student.rank || "Chưa có dữ liệu",
+        safeFamilyInfo,
         enlistmentDate,
-        student.ethnicity || "",
-        student.religion || "Không",
-        foreignInfo,
+        student.ethnicity || "Chưa có dữ liệu",
+        student.religion || "Chưa có dữ liệu",
+        safeForeignInfo,
         partyJoinDate,
         partyOfficialDate,
-        partyRating === "HTXSNV" ? "X" : "",
-        partyRating === "HTTNV" ? "X" : "",
-        partyRating === "KHTNV" ? "X" : "",
         partyRating === "HTXSNV" ? "X" : "", // Xuất sắc
+        partyRating === "HTTNV" ? "X" : "", // Tốt
+        partyRating === "HTNV" ? "X" : "", // Hoàn thành
+        partyRating === "KHTNV" ? "X" : "", // Không hoàn thành
         cstt,
         cstd,
         bkBqp,

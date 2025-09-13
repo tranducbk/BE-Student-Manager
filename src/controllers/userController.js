@@ -7,12 +7,27 @@ const limit = 11;
 
 const getUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId);
+    const user = await User.findById(req.params.userId)
+      .populate("student", "avatar fullName email")
+      .populate("commander", "avatar fullName email");
 
     if (!user)
       return res.status(404).json({ message: "Người dùng không tồn tại" });
 
-    return res.status(200).json(user);
+    // Thêm avatar vào user object
+    let avatar = null;
+    if (user.student && user.student.avatar) {
+      avatar = user.student.avatar;
+    } else if (user.commander && user.commander.avatar) {
+      avatar = user.commander.avatar;
+    }
+
+    const userWithAvatar = {
+      ...user.toObject(),
+      avatar: avatar,
+    };
+
+    return res.status(200).json(userWithAvatar);
   } catch (error) {
     return res.status(500).json(error);
   }

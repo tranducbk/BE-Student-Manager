@@ -58,7 +58,7 @@ const createSemester = async (req, res) => {
       const term = String(code).split(".")[1] || "";
       const termLabel = term ? `HK${term}` : code; // đồng bộ định dạng HK1/HK2/HK3
       const doc = await RegulatoryDocument.create({
-        title: `Thông báo học kỳ mới ${termLabel} - ${schoolYear}`,
+        title: `Thông báo học kỳ mới ${termLabel} năm học ${schoolYear}`,
         content: `Học kỳ ${termLabel} - ${schoolYear} đã được tạo. Vui lòng kiểm tra thông tin học tập và đăng ký theo quy định.`,
         dateIssued: new Date(),
         author: req.user?.id || "system",
