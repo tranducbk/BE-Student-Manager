@@ -28,7 +28,7 @@ const commanderSchema = mongoose.model(
     avatar: {
       type: String,
       default:
-        "https://i.pinimg.com/564x/24/21/85/242185eaef43192fc3f9646932fe3b46.jpg",
+        "https://i.pinimg.com/736x/d4/a1/ff/d4a1ff9d0f243e50062e2b21f2f2496d.jpg",
     },
   })
 );
