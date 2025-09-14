@@ -239,22 +239,43 @@ const deleteStudent = async (req, res) => {
     // Lưu thông tin lớp trước khi xóa
     const classId = student.class;
 
-    // Xóa user liên quan
-    const user = await User.findOne({ student: req.params.studentId });
+    // Xóa tất cả dữ liệu liên quan đến học viên
+    const studentId = req.params.studentId;
+
+    // 1. Xóa user liên quan
+    const user = await User.findOne({ student: studentId });
     if (user) {
       await User.findByIdAndDelete(user._id);
     }
 
-    // Xóa sinh viên
-    await Student.findByIdAndDelete(req.params.studentId);
+    // 2. Xóa khen thưởng học viên
+    const Achievement = require("../models/achievement");
+    await Achievement.deleteMany({ studentId: studentId });
 
-    // Cập nhật số lượng sinh viên trong lớp
+    // 3. Xóa thời khóa biểu
+    const TimeTable = require("../models/time_table");
+    await TimeTable.deleteMany({ studentId: studentId });
+
+    // 4. Xóa vi phạm
+    const Violation = require("../models/violation");
+    await Violation.deleteMany({ studentId: studentId });
+
+    // 5. Xóa thông báo học viên
+    const StudentNotification = require("../models/student_notifications");
+    await StudentNotification.deleteMany({ studentId: studentId });
+
+    // 6. Xóa sinh viên
+    await Student.findByIdAndDelete(studentId);
+
+    // 7. Cập nhật số lượng sinh viên trong lớp
     if (classId) {
       const classService = require("../services/classService");
       await classService.removeStudentFromClass(classId);
     }
 
-    return res.status(200).json({ message: "Xóa sinh viên thành công" });
+    return res.status(200).json({
+      message: "Xóa sinh viên và tất cả dữ liệu liên quan thành công",
+    });
   } catch (error) {
     console.error("Lỗi khi xóa sinh viên:", error);
     return res.status(500).json({ message: "Lỗi server" });
