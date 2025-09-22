@@ -867,9 +867,9 @@ const deleteForeignRelation = async (req, res) => {
   }
 };
 
-// ===== CRUD CHO XẾP LOẠI ĐẢNG VIÊN =====
+// ===== CRUD CHO XẾP LOẠI Đảng viên =====
 
-// Thêm xếp loại đảng viên
+// Thêm xếp loại Đảng viên
 const addPartyRating = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -884,7 +884,7 @@ const addPartyRating = async (req, res) => {
     await student.save();
 
     res.status(201).json({
-      message: "Thêm xếp loại đảng viên thành công",
+      message: "Thêm xếp loại Đảng viên thành công",
       partyRating: partyRatingData,
     });
   } catch (error) {
@@ -892,7 +892,7 @@ const addPartyRating = async (req, res) => {
   }
 };
 
-// Lấy danh sách xếp loại đảng viên
+// Lấy danh sách xếp loại Đảng viên
 const getPartyRatings = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -910,7 +910,7 @@ const getPartyRatings = async (req, res) => {
   }
 };
 
-// Cập nhật xếp loại đảng viên
+// Cập nhật xếp loại Đảng viên
 const updatePartyRating = async (req, res) => {
   try {
     const { studentId, partyRatingId } = req.params;
@@ -925,14 +925,14 @@ const updatePartyRating = async (req, res) => {
     if (!partyRating) {
       return res
         .status(404)
-        .json({ message: "Không tìm thấy xếp loại đảng viên" });
+        .json({ message: "Không tìm thấy xếp loại Đảng viên" });
     }
 
     Object.assign(partyRating, updateData);
     await student.save();
 
     res.status(200).json({
-      message: "Cập nhật xếp loại đảng viên thành công",
+      message: "Cập nhật xếp loại Đảng viên thành công",
       partyRating,
     });
   } catch (error) {
@@ -940,7 +940,7 @@ const updatePartyRating = async (req, res) => {
   }
 };
 
-// Xóa xếp loại đảng viên
+// Xóa xếp loại Đảng viên
 const deletePartyRating = async (req, res) => {
   try {
     const { studentId, partyRatingId } = req.params;
@@ -954,14 +954,14 @@ const deletePartyRating = async (req, res) => {
     if (!partyRating) {
       return res
         .status(404)
-        .json({ message: "Không tìm thấy xếp loại đảng viên" });
+        .json({ message: "Không tìm thấy xếp loại Đảng viên" });
     }
 
     partyRating.remove();
     await student.save();
 
     res.status(200).json({
-      message: "Xóa xếp loại đảng viên thành công",
+      message: "Xóa xếp loại Đảng viên thành công",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

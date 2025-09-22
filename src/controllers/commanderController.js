@@ -107,7 +107,8 @@ const updateTuitionFeeStatus = async (req, res) => {
 
 const getStudents = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const skip = (page - 1) * limit;
+  const pageSize = parseInt(req.query.pageSize) || limit;
+  const skip = (page - 1) * pageSize;
   const { fullName, unit, enrollment, schoolYear, graduated } = req.query;
   let query = {};
 
@@ -165,19 +166,23 @@ const getStudents = async (req, res) => {
         { path: "class", select: "className" },
       ])
       .skip(skip)
-      .limit(limit);
+      .limit(pageSize);
 
     if (students.length === 0) {
-      return res.json([]);
+      return res
+        .status(200)
+        .json({ students: [], totalPages: 1, totalStudents: 0 });
     }
 
     const totalCount = await Student.countDocuments(query);
 
     // Tính toán tổng số trang
-    const totalPages = Math.ceil(totalCount / limit);
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     // Trả về dữ liệu của trang hiện tại cùng với thông tin về tổng số trang
-    return res.status(200).json({ students, totalPages });
+    return res
+      .status(200)
+      .json({ students, totalPages, totalStudents: totalCount });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Lỗi server" });
@@ -1023,7 +1028,20 @@ const getAllCutRice = async (req, res) => {
   try {
     const unitQuery = req.query.unit;
 
-    const students = await Student.find(unitQuery ? { unit: unitQuery } : {});
+    // Xử lý tham số unit - hỗ trợ nhiều đơn vị (comma-separated)
+    let studentQuery = {};
+    if (unitQuery) {
+      if (unitQuery.includes(",")) {
+        // Nhiều đơn vị
+        const units = unitQuery.split(",").map((u) => u.trim());
+        studentQuery = { unit: { $in: units } };
+      } else {
+        // Một đơn vị
+        studentQuery = { unit: unitQuery };
+      }
+    }
+
+    const students = await Student.find(studentQuery);
 
     const cutRices = [];
 
@@ -2193,297 +2211,380 @@ const updateNotification = async (req, res) => {
 };
 
 const getExcelCutRice = async (req, res) => {
-  const unitQuery = req.query.unit;
+  try {
+    const unitQuery = req.query.unit;
 
-  let students = await Student.find({});
+    let students = await Student.find({});
 
-  // Lọc theo đơn vị nếu có
-  if (unitQuery && unitQuery !== "all") {
-    const unitArray = unitQuery.split(",");
-    students = students.filter((student) => unitArray.includes(student.unit));
-  }
+    // Lọc theo đơn vị nếu có
+    if (unitQuery && unitQuery !== "all") {
+      const unitArray = unitQuery.split(",");
+      students = students.filter((student) => unitArray.includes(student.unit));
+    }
 
-  const cutRices = [];
+    const cutRices = [];
 
-  students.forEach((student) => {
-    student.cutRice.forEach((cutRice) => {
-      cutRices.push({
-        _id: cutRice._id,
-        studentId: student._id,
-        fullName: student.fullName,
-        unit: student.unit,
-        monday: cutRice.monday,
-        tuesday: cutRice.tuesday,
-        wednesday: cutRice.wednesday,
-        thursday: cutRice.thursday,
-        friday: cutRice.friday,
-        saturday: cutRice.saturday,
-        sunday: cutRice.sunday,
-      });
+    students.forEach((student) => {
+      if (student.cutRice && student.cutRice.length > 0) {
+        student.cutRice.forEach((cutRice) => {
+          cutRices.push({
+            _id: cutRice._id,
+            studentId: student._id,
+            fullName: student.fullName,
+            unit: student.unit,
+            monday: cutRice.monday,
+            tuesday: cutRice.tuesday,
+            wednesday: cutRice.wednesday,
+            thursday: cutRice.thursday,
+            friday: cutRice.friday,
+            saturday: cutRice.saturday,
+            sunday: cutRice.sunday,
+          });
+        });
+      } else {
+        // Thêm một dòng placeholder nếu học viên chưa có dữ liệu
+        cutRices.push({
+          _id: undefined,
+          studentId: student._id,
+          fullName: student.fullName,
+          unit: student.unit,
+          noData: true,
+        });
+      }
     });
-  });
 
-  // Sắp xếp theo thứ tự từ L1 đến L6
-  cutRices.sort((a, b) => {
-    const unitOrder = {
-      "L1 - H5": 1,
-      "L2 - H5": 2,
-      "L3 - H5": 3,
-      "L4 - H5": 4,
-      "L5 - H5": 5,
-      "L6 - H5": 6,
-    };
-    return (unitOrder[a.unit] || 999) - (unitOrder[b.unit] || 999);
-  });
+    // Sắp xếp theo thứ tự từ L1 đến L6
+    cutRices.sort((a, b) => {
+      const unitOrder = {
+        "L1 - H5": 1,
+        "L2 - H5": 2,
+        "L3 - H5": 3,
+        "L4 - H5": 4,
+        "L5 - H5": 5,
+        "L6 - H5": 6,
+      };
+      return (unitOrder[a.unit] || 999) - (unitOrder[b.unit] || 999);
+    });
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Danh sách cắt cơm học viên H5");
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Danh sách cắt cơm học viên H5");
 
-  // Thêm tiêu đề lớn
-  worksheet.mergeCells("B2:I2");
-  worksheet.getCell("B2").value = "HỌC VIỆN KHOA HỌC QUÂN SỰ";
-  worksheet.getCell("B2").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("B2").font = {
-    name: "Times New Roman",
-    size: 13,
-  };
-
-  worksheet.mergeCells("D3:G3");
-  worksheet.getCell("D3").value = "HỆ HỌC VIÊN 5";
-  worksheet.getCell("D3").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("D3").font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  worksheet.mergeCells("G7:N7");
-  worksheet.getCell("G7").value = "DANH SÁCH CẮT CƠM CỦA HỌC VIÊN HỆ 5";
-  worksheet.getCell("G7").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("G7").font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  worksheet.mergeCells("M2:S2");
-  worksheet.getCell("M2").value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM";
-  worksheet.getCell("M2").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("M2").font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  worksheet.mergeCells("N3:R3");
-  worksheet.getCell("N3").value = "Độc lập - Tự do - Hạnh phúc";
-  worksheet.getCell("N3").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("N3").font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  worksheet.mergeCells("O5:R5");
-  worksheet.getCell("O5").value = "Hà Nội, ngày ... tháng ... năm 2025";
-  worksheet.getCell("O5").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("O5").font = { name: "Times New Roman", size: 13 };
-
-  // Thêm hàng trống thứ 8, 9
-  worksheet.addRow([]);
-  worksheet.addRow([]);
-
-  // Định nghĩa các cột và merge cells cho header
-  worksheet.mergeCells("A10:A11");
-  worksheet.getCell("A10").value = "Đơn vị";
-  worksheet.getCell("A10").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("A10").font = { name: "Times New Roman", size: 13 };
-
-  worksheet.mergeCells("B10:B11");
-  worksheet.getCell("B10").value = "Họ và tên";
-  worksheet.getCell("B10").alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell("B10").font = { name: "Times New Roman", size: 13 };
-
-  const days = [
-    "Thứ 2",
-    "Thứ 3",
-    "Thứ 4",
-    "Thứ 5",
-    "Thứ 6",
-    "Thứ 7",
-    "Chủ nhật",
-  ];
-  const meals = ["Sáng", "Trưa", "Chiều"];
-
-  days.forEach((day, i) => {
-    worksheet.mergeCells(10, i * 3 + 3, 10, i * 3 + 5);
-    worksheet.getCell(10, i * 3 + 3).value = day;
-    worksheet.getCell(10, i * 3 + 3).alignment = {
+    // Thêm tiêu đề lớn
+    worksheet.mergeCells("B2:I2");
+    worksheet.getCell("B2").value = "HỌC VIỆN KHOA HỌC QUÂN SỰ";
+    worksheet.getCell("B2").alignment = {
       vertical: "middle",
       horizontal: "center",
     };
-    worksheet.getCell(10, i * 3 + 3).font = {
+    worksheet.getCell("B2").font = {
       name: "Times New Roman",
       size: 13,
     };
 
-    meals.forEach((meal, j) => {
-      worksheet.getCell(11, i * 3 + 3 + j).value = meal;
-      worksheet.getCell(11, i * 3 + 3 + j).alignment = {
+    worksheet.mergeCells("D3:G3");
+    worksheet.getCell("D3").value = "HỆ HỌC VIÊN 5";
+    worksheet.getCell("D3").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("D3").font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    worksheet.mergeCells("G7:N7");
+    worksheet.getCell("G7").value = "DANH SÁCH CẮT CƠM CỦA HỌC VIÊN HỆ 5";
+    worksheet.getCell("G7").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("G7").font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    worksheet.mergeCells("M2:S2");
+    worksheet.getCell("M2").value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM";
+    worksheet.getCell("M2").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("M2").font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    worksheet.mergeCells("N3:R3");
+    worksheet.getCell("N3").value = "Độc lập - Tự do - Hạnh phúc";
+    worksheet.getCell("N3").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("N3").font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    worksheet.mergeCells("O5:R5");
+    worksheet.getCell("O5").value = "Hà Nội, ngày ... tháng ... năm 2025";
+    worksheet.getCell("O5").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("O5").font = { name: "Times New Roman", size: 13 };
+
+    // Thêm hàng trống thứ 8, 9
+    worksheet.addRow([]);
+    worksheet.addRow([]);
+
+    // Định nghĩa các cột và merge cells cho header
+    worksheet.mergeCells("A10:A11");
+    worksheet.getCell("A10").value = "Đơn vị";
+    worksheet.getCell("A10").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("A10").font = { name: "Times New Roman", size: 13 };
+
+    worksheet.mergeCells("B10:B11");
+    worksheet.getCell("B10").value = "Họ và tên";
+    worksheet.getCell("B10").alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell("B10").font = { name: "Times New Roman", size: 13 };
+
+    const days = [
+      "Thứ 2",
+      "Thứ 3",
+      "Thứ 4",
+      "Thứ 5",
+      "Thứ 6",
+      "Thứ 7",
+      "Chủ nhật",
+    ];
+    const meals = ["Sáng", "Trưa", "Chiều"];
+
+    days.forEach((day, i) => {
+      worksheet.mergeCells(10, i * 3 + 3, 10, i * 3 + 5);
+      worksheet.getCell(10, i * 3 + 3).value = day;
+      worksheet.getCell(10, i * 3 + 3).alignment = {
         vertical: "middle",
         horizontal: "center",
       };
-      worksheet.getCell(11, i * 3 + 3 + j).font = {
+      worksheet.getCell(10, i * 3 + 3).font = {
         name: "Times New Roman",
         size: 13,
       };
+
+      meals.forEach((meal, j) => {
+        worksheet.getCell(11, i * 3 + 3 + j).value = meal;
+        worksheet.getCell(11, i * 3 + 3 + j).alignment = {
+          vertical: "middle",
+          horizontal: "center",
+        };
+        worksheet.getCell(11, i * 3 + 3 + j).font = {
+          name: "Times New Roman",
+          size: 13,
+        };
+      });
     });
-  });
 
-  // Thêm dữ liệu với logic gộp cột đơn vị
-  let currentUnit = "";
-  let unitStartRow = 12; // Bắt đầu từ hàng 12 (sau header)
+    // Thêm dữ liệu với logic gộp cột đơn vị
+    let currentUnit = "";
+    let unitStartRow = 12; // Bắt đầu từ hàng 12 (sau header)
 
-  cutRices.forEach((record, index) => {
-    const row = [
-      record.unit, // Cột đơn vị
-      record.fullName,
-      record.monday.breakfast ? "x" : "",
-      record.monday.lunch ? "x" : "",
-      record.monday.dinner ? "x" : "",
-      record.tuesday.breakfast ? "x" : "",
-      record.tuesday.lunch ? "x" : "",
-      record.tuesday.dinner ? "x" : "",
-      record.wednesday.breakfast ? "x" : "",
-      record.wednesday.lunch ? "x" : "",
-      record.wednesday.dinner ? "x" : "",
-      record.thursday.breakfast ? "x" : "",
-      record.thursday.lunch ? "x" : "",
-      record.thursday.dinner ? "x" : "",
-      record.friday.breakfast ? "x" : "",
-      record.friday.lunch ? "x" : "",
-      record.friday.dinner ? "x" : "",
-      record.saturday.breakfast ? "x" : "",
-      record.saturday.lunch ? "x" : "",
-      record.saturday.dinner ? "x" : "",
-      record.sunday.breakfast ? "x" : "",
-      record.sunday.lunch ? "x" : "",
-      record.sunday.dinner ? "x" : "",
-    ];
+    cutRices.forEach((record, index) => {
+      const isNoData = record.noData === true;
+      let row;
 
-    const addedRow = worksheet.addRow(row);
-    const currentRow = 12 + index; // Hàng hiện tại
+      if (isNoData) {
+        // Tạo row đầy đủ với "Chưa có dữ liệu" cho các cột cắt cơm
+        row = [
+          record.unit, // Cột đơn vị
+          record.fullName,
+          "Chưa có dữ liệu", // Thay thế tất cả các cột cắt cơm
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+          "Chưa có dữ liệu",
+        ];
+      } else {
+        row = [
+          record.unit, // Cột đơn vị
+          record.fullName,
+          record.monday.breakfast ? "x" : "",
+          record.monday.lunch ? "x" : "",
+          record.monday.dinner ? "x" : "",
+          record.tuesday.breakfast ? "x" : "",
+          record.tuesday.lunch ? "x" : "",
+          record.tuesday.dinner ? "x" : "",
+          record.wednesday.breakfast ? "x" : "",
+          record.wednesday.lunch ? "x" : "",
+          record.wednesday.dinner ? "x" : "",
+          record.thursday.breakfast ? "x" : "",
+          record.thursday.lunch ? "x" : "",
+          record.thursday.dinner ? "x" : "",
+          record.friday.breakfast ? "x" : "",
+          record.friday.lunch ? "x" : "",
+          record.friday.dinner ? "x" : "",
+          record.saturday.breakfast ? "x" : "",
+          record.saturday.lunch ? "x" : "",
+          record.saturday.dinner ? "x" : "",
+          record.sunday.breakfast ? "x" : "",
+          record.sunday.lunch ? "x" : "",
+          record.sunday.dinner ? "x" : "",
+        ];
+      }
 
-    // Logic gộp cột đơn vị
-    if (record.unit !== currentUnit) {
-      // Nếu đơn vị thay đổi và có đơn vị trước đó, gộp các ô
-      if (currentUnit !== "" && currentRow > unitStartRow) {
-        worksheet.mergeCells(`A${unitStartRow}:A${currentRow - 1}`);
+      const addedRow = worksheet.addRow(row);
+      const currentRow = 12 + index; // Hàng hiện tại
+
+      // Logic gộp cột đơn vị
+      if (record.unit !== currentUnit) {
+        // Nếu đơn vị thay đổi và có đơn vị trước đó, gộp các ô
+        if (currentUnit !== "" && currentRow > unitStartRow) {
+          worksheet.mergeCells(`A${unitStartRow}:A${currentRow - 1}`);
+          worksheet.getCell(`A${unitStartRow}`).alignment = {
+            vertical: "middle",
+            horizontal: "center",
+          };
+        }
+        currentUnit = record.unit;
+        unitStartRow = currentRow;
+      }
+
+      addedRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = { name: "Times New Roman", size: 13 };
+        // Căn giữa cho tất cả các ô dữ liệu
+        cell.alignment = {
+          vertical: "middle",
+          horizontal: "center",
+        };
+
+        // Styling đặc biệt cho các ô "Chưa có dữ liệu"
+        if (isNoData && colNumber >= 3) {
+          cell.font = {
+            name: "Times New Roman",
+            size: 13,
+            italic: true,
+            color: { argb: "FF666666" },
+          };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF0F0F0" },
+          };
+        }
+      });
+    });
+
+    // Gộp ô cho đơn vị cuối cùng
+    if (currentUnit !== "" && cutRices.length > 0) {
+      const lastRow = 12 + cutRices.length - 1;
+      if (lastRow >= unitStartRow) {
+        worksheet.mergeCells(`A${unitStartRow}:A${lastRow}`);
         worksheet.getCell(`A${unitStartRow}`).alignment = {
           vertical: "middle",
           horizontal: "center",
         };
       }
-      currentUnit = record.unit;
-      unitStartRow = currentRow;
     }
 
-    addedRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      cell.font = { name: "Times New Roman", size: 13 };
-      // Căn giữa cho tất cả các ô dữ liệu
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: "center",
-      };
+    // Định nghĩa border cho tất cả các ô trong bảng
+    const totalColumns = 25; // Số cột từ 'Đơn vị' tới 'Chủ nhật' (tăng 1 do thêm cột đơn vị)
+    const totalRows = cutRices.length + 11; // Tổng số hàng bao gồm header và dữ liệu
+
+    for (let i = 10; i <= totalRows; i++) {
+      for (let j = 1; j <= totalColumns; j++) {
+        worksheet.getCell(i, j).border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+    }
+
+    worksheet.mergeCells(`Q${totalRows + 3}:T${totalRows + 3}`);
+    worksheet.getCell(`Q${totalRows + 3}`).value = "PHÓ HỆ TRƯỞNG";
+    worksheet.getCell(`Q${totalRows + 3}`).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell(`Q${totalRows + 3}`).font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    worksheet.mergeCells(`Q${totalRows + 6}:T${totalRows + 6}`);
+    worksheet.getCell(`Q${totalRows + 6}`).value = "Phạm Hữu Khôi";
+    worksheet.getCell(`Q${totalRows + 6}`).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    worksheet.getCell(`Q${totalRows + 6}`).font = {
+      name: "Times New Roman",
+      size: 13,
+      bold: true,
+    };
+
+    // Tạo tên file động dựa trên đơn vị
+    let fileName = "Danh_sach_cat_com_he_hoc_vien_5";
+    if (unitQuery && unitQuery !== "all") {
+      if (unitQuery.includes(",")) {
+        const units = unitQuery
+          .split(",")
+          .map((u) => u.trim().replace(/[^a-zA-Z0-9]/g, ""));
+        fileName = `Danh_sach_cat_com_${units.join("_")}`;
+      } else {
+        fileName = `Danh_sach_cat_com_${unitQuery.replace(
+          /[^a-zA-Z0-9]/g,
+          ""
+        )}`;
+      }
+    }
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${fileName}.xlsx`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Lỗi khi tạo file Excel:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi tạo file Excel",
+      error: error.message,
     });
-  });
-
-  // Gộp ô cho đơn vị cuối cùng
-  if (currentUnit !== "" && cutRices.length > 0) {
-    const lastRow = 12 + cutRices.length - 1;
-    if (lastRow >= unitStartRow) {
-      worksheet.mergeCells(`A${unitStartRow}:A${lastRow}`);
-      worksheet.getCell(`A${unitStartRow}`).alignment = {
-        vertical: "middle",
-        horizontal: "center",
-      };
-    }
   }
-
-  // Định nghĩa border cho tất cả các ô trong bảng
-  const totalColumns = 25; // Số cột từ 'Đơn vị' tới 'Chủ nhật' (tăng 1 do thêm cột đơn vị)
-  const totalRows = cutRices.length + 11; // Tổng số hàng bao gồm header và dữ liệu
-
-  for (let i = 10; i <= totalRows; i++) {
-    for (let j = 1; j <= totalColumns; j++) {
-      worksheet.getCell(i, j).border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-    }
-  }
-
-  worksheet.mergeCells(`Q${totalRows + 3}:T${totalRows + 3}`);
-  worksheet.getCell(`Q${totalRows + 3}`).value = "PHÓ HỆ TRƯỞNG";
-  worksheet.getCell(`Q${totalRows + 3}`).alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell(`Q${totalRows + 3}`).font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  worksheet.mergeCells(`Q${totalRows + 6}:T${totalRows + 6}`);
-  worksheet.getCell(`Q${totalRows + 6}`).value = "Phạm Hữu Khôi";
-  worksheet.getCell(`Q${totalRows + 6}`).alignment = {
-    vertical: "middle",
-    horizontal: "center",
-  };
-  worksheet.getCell(`Q${totalRows + 6}`).font = {
-    name: "Times New Roman",
-    size: 13,
-    bold: true,
-  };
-
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  );
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=Danh_sach_cat_com_he_hoc_vien_5.xlsx"
-  );
-
-  await workbook.xlsx.write(res);
-  res.end();
 };
 
 const getPdfLearningResult = async (req, res) => {
@@ -3896,15 +3997,19 @@ const updateStudent = async (req, res) => {
 // Lấy tất cả điểm học tập của tất cả sinh viên
 const getAllStudentsGrades = async (req, res) => {
   try {
-    const { semester, schoolYear } = req.query;
+    const { semester, schoolYear, page = 1, pageSize = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(pageSize);
     console.log("=== getAllStudentsGrades START ===");
-    console.log("Query parameters:", { semester, schoolYear });
+    console.log("Query parameters:", { semester, schoolYear, page, pageSize });
 
-    // Lấy tất cả students với thông tin đầy đủ
-    const students = await Student.find().populate([
-      { path: "university", select: "universityName" },
-      { path: "class", select: "className" },
-    ]);
+    // Lấy students với phân trang
+    const students = await Student.find()
+      .populate([
+        { path: "university", select: "universityName" },
+        { path: "class", select: "className" },
+      ])
+      .skip(skip)
+      .limit(parseInt(pageSize));
 
     console.log("Total students found:", students.length);
 
@@ -4073,7 +4178,21 @@ const getAllStudentsGrades = async (req, res) => {
     console.log("Final learning results count:", allLearningResults.length);
     console.log("Sample result:", allLearningResults[0]);
 
-    return res.status(200).json(allLearningResults);
+    // Tính tổng số students để phân trang
+    const totalStudents = await Student.countDocuments();
+    const totalPages = Math.ceil(totalStudents / parseInt(pageSize));
+
+    // Kiểm tra nếu có tham số phân trang thì trả về object, không thì trả về mảng như cũ
+    if (req.query.page || req.query.pageSize) {
+      return res.status(200).json({
+        learningResults: allLearningResults,
+        totalPages,
+        currentPage: parseInt(page),
+        totalStudents,
+      });
+    } else {
+      return res.status(200).json(allLearningResults);
+    }
   } catch (error) {
     console.error("Error in getAllStudentsGrades:", error);
     return res.status(500).json({ message: "Lỗi server" });
@@ -5118,7 +5237,7 @@ const updateStudentRating = async (req, res) => {
         .json({ message: "Không tìm thấy kết quả năm học" });
     }
 
-    // Cập nhật xếp loại đảng viên
+    // Cập nhật xếp loại Đảng viên
     if (partyRating) {
       student.yearlyResults[yearlyIndex].partyRating = {
         decisionNumber: decisionNumber || "",
@@ -5369,7 +5488,6 @@ const getYearlyStatistics = async (req, res) => {
             studentLevel: studentLevel,
             subjects: allSubjects,
             totalCredits: totalCredits,
-            semesterCount: yearResults.length,
             partyRating: existingYearlyResult?.partyRating || null,
             trainingRating: existingYearlyResult?.trainingRating || null,
             academicStatus: existingYearlyResult?.academicStatus || null,
@@ -5450,7 +5568,6 @@ const getYearlyStatistics = async (req, res) => {
                 totalDebt: totalDebt,
                 subjects: allSubjects,
                 totalCredits: totalCredits,
-                semesterCount: yearSemesterResults.length,
                 partyRating: yearlyResult.partyRating || null,
                 trainingRating: yearlyResult.trainingRating || null,
                 academicStatus: yearlyResult.academicStatus || null,
@@ -5536,7 +5653,6 @@ const getYearlyStatistics = async (req, res) => {
                 totalDebt: totalDebt,
                 subjects: group.allSubjects,
                 totalCredits: group.totalCredits,
-                semesterCount: group.results.length,
                 partyRating: null,
                 trainingRating: null,
                 academicStatus: null,
@@ -5567,7 +5683,127 @@ const getYearlyStatistics = async (req, res) => {
   }
 };
 
-// API lấy dữ liệu xếp loại đảng viên
+// API lấy tất cả sinh viên cho xếp loại Đảng viên (bao gồm sinh viên mới)
+const getAllStudentsForPartyRating = async (req, res) => {
+  try {
+    const { schoolYear, page = 1, pageSize = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(pageSize);
+    console.log("=== getAllStudentsForPartyRating START ===");
+    console.log("Query parameters:", { schoolYear, page, pageSize });
+
+    // Lấy students với phân trang
+    const students = await Student.find()
+      .populate([
+        { path: "university", select: "universityName" },
+        { path: "class", select: "className" },
+      ])
+      .skip(skip)
+      .limit(parseInt(pageSize));
+
+    console.log("Total students found:", students.length);
+
+    let partyRatings = [];
+
+    // Lặp qua từng student để tạo dữ liệu xếp loại Đảng viên
+    for (const student of students) {
+      console.log(
+        `Processing student: ${student.fullName} (${student.studentId})`
+      );
+
+      try {
+        // Kiểm tra xem sinh viên có dữ liệu học tập không
+        const semesterResults = student.semesterResults || [];
+        const yearlyResults = student.yearlyResults || [];
+
+        console.log(
+          `  - Semester results: ${semesterResults.length}, Yearly results: ${yearlyResults.length}`
+        );
+
+        if (schoolYear && schoolYear !== "all" && schoolYear !== "undefined") {
+          // Nếu có schoolYear cụ thể, kiểm tra xem sinh viên có dữ liệu năm đó không
+          const hasDataForYear =
+            semesterResults.some(
+              (result) => result.schoolYear === schoolYear
+            ) ||
+            yearlyResults.some((result) => result.schoolYear === schoolYear);
+
+          if (!hasDataForYear) {
+            console.log(`  - No data for school year ${schoolYear}, skipping`);
+            continue;
+          }
+        } else if (semesterResults.length === 0 && yearlyResults.length === 0) {
+          // Nếu không có dữ liệu học tập nào, tạo entry mặc định
+          console.log(`  - No academic data, creating default entry`);
+        }
+
+        // Xác định schoolYear cho sinh viên
+        let studentSchoolYear = "Chưa có dữ liệu";
+
+        if (schoolYear && schoolYear !== "undefined" && schoolYear !== "all") {
+          // Nếu có schoolYear cụ thể, sử dụng schoolYear đó
+          studentSchoolYear = schoolYear;
+        } else if (semesterResults.length > 0) {
+          // Nếu không có schoolYear cụ thể nhưng có dữ liệu học tập, lấy năm học mới nhất
+          const latestSemester = semesterResults[semesterResults.length - 1];
+          studentSchoolYear = latestSemester.schoolYear;
+        } else if (yearlyResults.length > 0) {
+          // Nếu không có semesterResults nhưng có yearlyResults, lấy năm học mới nhất
+          const latestYearly = yearlyResults[yearlyResults.length - 1];
+          studentSchoolYear = latestYearly.schoolYear;
+        }
+
+        // Tạo kết quả cho sinh viên
+        const partyRating = {
+          _id: student._id,
+          studentId: student._id,
+          fullName: student.fullName,
+          studentCode: student.studentId,
+          university: student.university?.universityName || "",
+          className: student.class?.className || "Chưa có lớp",
+          unit: student.unit || "",
+          positionParty: student.positionParty || "Không",
+          schoolYear: studentSchoolYear,
+          yearlyResultId: null,
+          cumulativeCredit: 0,
+          totalDebt: 0,
+          studentLevel: 1,
+          partyRating: student.partyRating || null,
+        };
+
+        console.log(
+          `  - Party rating: ${partyRating.fullName} - Position: ${partyRating.positionParty} - SchoolYear: ${partyRating.schoolYear}`
+        );
+        partyRatings.push(partyRating);
+      } catch (error) {
+        console.log(`Error processing student ${student._id}:`, error);
+      }
+    }
+
+    console.log("=== getAllStudentsForPartyRating END ===");
+    console.log("Final party ratings count:", partyRatings.length);
+
+    // Tính tổng số students để phân trang
+    const totalStudents = await Student.countDocuments();
+    const totalPages = Math.ceil(totalStudents / parseInt(pageSize));
+
+    // Kiểm tra nếu có tham số phân trang thì trả về object, không thì trả về mảng như cũ
+    if (req.query.page || req.query.pageSize) {
+      return res.status(200).json({
+        partyRatings,
+        totalPages,
+        currentPage: parseInt(page),
+        totalStudents,
+      });
+    } else {
+      return res.status(200).json(partyRatings);
+    }
+  } catch (error) {
+    console.error("Error in getAllStudentsForPartyRating:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// API lấy dữ liệu xếp loại Đảng viên
 const getPartyRatings = async (req, res) => {
   try {
     const { schoolYear } = req.query;
@@ -5584,7 +5820,7 @@ const getPartyRatings = async (req, res) => {
 
     let partyRatings = [];
 
-    // Lặp qua từng student để lấy dữ liệu xếp loại đảng viên
+    // Lặp qua từng student để lấy dữ liệu xếp loại Đảng viên
     for (const student of students) {
       console.log(
         `Processing student: ${student.fullName} (${student.studentId})`
@@ -5628,7 +5864,7 @@ const getPartyRatings = async (req, res) => {
             (result) => result.schoolYear === schoolYear
           );
 
-          // Tạo kết quả xếp loại đảng viên
+          // Tạo kết quả xếp loại Đảng viên
           const partyRating = {
             _id: student._id,
             studentId: student._id,
@@ -5643,7 +5879,6 @@ const getPartyRatings = async (req, res) => {
             cumulativeCredit: cumulativeCredits,
             totalDebt: totalDebt,
             studentLevel: studentLevel,
-            semesterCount: yearResults.length,
             partyRating: existingYearlyResult?.partyRating || null,
           };
 
@@ -5678,7 +5913,6 @@ const getPartyRatings = async (req, res) => {
                 yearlyResultId: yearlyResult._id,
                 cumulativeCredit: cumulativeCredits,
                 totalDebt: totalDebt,
-                semesterCount: yearSemesterResults.length,
                 partyRating: yearlyResult.partyRating || null,
               };
 
@@ -5722,7 +5956,6 @@ const getPartyRatings = async (req, res) => {
                 yearlyResultId: null,
                 cumulativeCredit: cumulativeCredits,
                 totalDebt: totalDebt,
-                semesterCount: group.results.length,
                 partyRating: null,
               };
 
@@ -5744,6 +5977,125 @@ const getPartyRatings = async (req, res) => {
     return res.status(200).json(partyRatings);
   } catch (error) {
     console.error("Error in getPartyRatings:", error);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// API lấy tất cả sinh viên cho xếp loại rèn luyện (bao gồm sinh viên mới)
+const getAllStudentsForTrainingRating = async (req, res) => {
+  try {
+    const { schoolYear, page = 1, pageSize = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(pageSize);
+    console.log("=== getAllStudentsForTrainingRating START ===");
+    console.log("Query parameters:", { schoolYear, page, pageSize });
+
+    // Lấy students với phân trang
+    const students = await Student.find()
+      .populate([
+        { path: "university", select: "universityName" },
+        { path: "class", select: "className" },
+      ])
+      .skip(skip)
+      .limit(parseInt(pageSize));
+
+    console.log("Total students found:", students.length);
+
+    let trainingRatings = [];
+
+    // Lặp qua từng student để tạo dữ liệu xếp loại rèn luyện
+    for (const student of students) {
+      console.log(
+        `Processing student: ${student.fullName} (${student.studentId})`
+      );
+
+      try {
+        // Kiểm tra xem sinh viên có dữ liệu học tập không
+        const semesterResults = student.semesterResults || [];
+        const yearlyResults = student.yearlyResults || [];
+
+        console.log(
+          `  - Semester results: ${semesterResults.length}, Yearly results: ${yearlyResults.length}`
+        );
+
+        if (schoolYear && schoolYear !== "all" && schoolYear !== "undefined") {
+          // Nếu có schoolYear cụ thể, kiểm tra xem sinh viên có dữ liệu năm đó không
+          const hasDataForYear =
+            semesterResults.some(
+              (result) => result.schoolYear === schoolYear
+            ) ||
+            yearlyResults.some((result) => result.schoolYear === schoolYear);
+
+          if (!hasDataForYear) {
+            console.log(`  - No data for school year ${schoolYear}, skipping`);
+            continue;
+          }
+        } else if (semesterResults.length === 0 && yearlyResults.length === 0) {
+          // Nếu không có dữ liệu học tập nào, tạo entry mặc định
+          console.log(`  - No academic data, creating default entry`);
+        }
+
+        // Xác định schoolYear cho sinh viên
+        let studentSchoolYear = "Chưa có dữ liệu";
+
+        if (schoolYear && schoolYear !== "undefined" && schoolYear !== "all") {
+          // Nếu có schoolYear cụ thể, sử dụng schoolYear đó
+          studentSchoolYear = schoolYear;
+        } else if (semesterResults.length > 0) {
+          // Nếu không có schoolYear cụ thể nhưng có dữ liệu học tập, lấy năm học mới nhất
+          const latestSemester = semesterResults[semesterResults.length - 1];
+          studentSchoolYear = latestSemester.schoolYear;
+        } else if (yearlyResults.length > 0) {
+          // Nếu không có semesterResults nhưng có yearlyResults, lấy năm học mới nhất
+          const latestYearly = yearlyResults[yearlyResults.length - 1];
+          studentSchoolYear = latestYearly.schoolYear;
+        }
+
+        // Tạo kết quả cho sinh viên
+        const trainingRating = {
+          _id: student._id,
+          studentId: student._id,
+          fullName: student.fullName,
+          studentCode: student.studentId,
+          university: student.university?.universityName || "",
+          className: student.class?.className || "Chưa có lớp",
+          unit: student.unit || "",
+          schoolYear: studentSchoolYear,
+          yearlyResultId: null,
+          cumulativeCredit: 0,
+          totalDebt: 0,
+          studentLevel: 1,
+          trainingRating: student.trainingRating || null,
+        };
+
+        console.log(
+          `  - Training rating: ${trainingRating.fullName} - Rating: ${trainingRating.trainingRating} - SchoolYear: ${trainingRating.schoolYear}`
+        );
+        trainingRatings.push(trainingRating);
+      } catch (error) {
+        console.log(`Error processing student ${student._id}:`, error);
+      }
+    }
+
+    console.log("=== getAllStudentsForTrainingRating END ===");
+    console.log("Final training ratings count:", trainingRatings.length);
+
+    // Tính tổng số students để phân trang
+    const totalStudents = await Student.countDocuments();
+    const totalPages = Math.ceil(totalStudents / parseInt(pageSize));
+
+    // Kiểm tra nếu có tham số phân trang thì trả về object, không thì trả về mảng như cũ
+    if (req.query.page || req.query.pageSize) {
+      return res.status(200).json({
+        trainingRatings,
+        totalPages,
+        currentPage: parseInt(page),
+        totalStudents,
+      });
+    } else {
+      return res.status(200).json(trainingRatings);
+    }
+  } catch (error) {
+    console.error("Error in getAllStudentsForTrainingRating:", error);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -5824,7 +6176,6 @@ const getTrainingRatings = async (req, res) => {
             cumulativeCredit: cumulativeCredits,
             totalDebt: totalDebt,
             studentLevel: studentLevel,
-            semesterCount: yearResults.length,
             trainingRating: existingYearlyResult?.trainingRating || null,
           };
 
@@ -5859,7 +6210,6 @@ const getTrainingRatings = async (req, res) => {
                 yearlyResultId: yearlyResult._id,
                 cumulativeCredit: cumulativeCredits,
                 totalDebt: totalDebt,
-                semesterCount: yearSemesterResults.length,
                 trainingRating: yearlyResult.trainingRating || null,
               };
 
@@ -5903,7 +6253,6 @@ const getTrainingRatings = async (req, res) => {
                 yearlyResultId: null,
                 cumulativeCredit: cumulativeCredits,
                 totalDebt: totalDebt,
-                semesterCount: group.results.length,
                 trainingRating: null,
               };
 
@@ -6433,10 +6782,15 @@ const getGraduatedStudents = async (req, res) => {
 // Lấy tất cả sinh viên cho modal cập nhật đồng loạt
 const getAllStudents = async (req, res) => {
   try {
+    const { page = 1, pageSize = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(pageSize);
+
     const students = await Student.find()
       .populate("university")
       .populate("class")
-      .sort({ dateOfEnlistment: -1 }); // Sắp xếp theo ngày nhập ngũ giảm dần
+      .sort({ dateOfEnlistment: -1 }) // Sắp xếp theo ngày nhập ngũ giảm dần
+      .skip(skip)
+      .limit(parseInt(pageSize));
 
     const allStudents = students.map((student) => ({
       _id: student._id,
@@ -6451,7 +6805,21 @@ const getAllStudents = async (req, res) => {
       class: student.class?.className || student.class,
     }));
 
-    res.status(200).json(allStudents);
+    // Tính tổng số students để phân trang
+    const totalStudents = await Student.countDocuments();
+    const totalPages = Math.ceil(totalStudents / parseInt(pageSize));
+
+    // Kiểm tra nếu có tham số phân trang thì trả về object, không thì trả về mảng như cũ
+    if (req.query.page || req.query.pageSize) {
+      res.status(200).json({
+        students: allStudents,
+        totalPages,
+        currentPage: parseInt(page),
+        totalStudents,
+      });
+    } else {
+      res.status(200).json(allStudents);
+    }
   } catch (error) {
     console.error("Lỗi lấy danh sách tất cả sinh viên:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -6561,10 +6929,6 @@ const getExcelPoliticalManagement = async (req, res) => {
         },
       ],
     };
-
-    console.log(`=== DEBUG: Tìm kiếm sinh viên cho năm học ${schoolYear} ===`);
-    console.log(`- Start Year: ${startYear}`);
-    console.log(`- Query:`, JSON.stringify(query, null, 2));
 
     const students = await Student.find(query)
       .populate("university", "universityName")
@@ -6770,7 +7134,7 @@ const getExcelPoliticalManagement = async (req, res) => {
       const safeForeignInfo =
         foreignInfo && foreignInfo.trim() !== ""
           ? foreignInfo
-          : "Chưa có dữ liệu";
+          : "Không có mối quan hệ có yếu tố nước ngoài";
 
       const partyJoinDate = student.probationaryPartyMember
         ? new Date(student.probationaryPartyMember).toLocaleDateString("vi-VN")
@@ -6983,8 +7347,29 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
   try {
     const { unit } = req.query;
 
-    // Sử dụng API có sẵn để lấy dữ liệu lịch học (đã được xử lý sẵn)
-    const timeTableQuery = unit ? { unit } : {};
+    // Xử lý tham số unit - hỗ trợ nhiều đơn vị (comma-separated)
+    let timeTableQuery = {};
+    if (unit) {
+      // Lấy danh sách studentId theo unit trước
+      let studentQuery = {};
+      if (unit.includes(",")) {
+        // Nhiều đơn vị
+        const units = unit.split(",").map((u) => u.trim());
+        studentQuery = { unit: { $in: units } };
+      } else {
+        // Một đơn vị
+        studentQuery = { unit };
+      }
+
+      console.log("Student query:", studentQuery);
+      const students = await Student.find(studentQuery).select("_id");
+      const studentIds = students.map((s) => s._id);
+      console.log("Found students:", studentIds.length);
+
+      timeTableQuery = { studentId: { $in: studentIds } };
+    }
+
+    console.log("TimeTable query:", timeTableQuery);
     const timeTableData = await TimeTable.find(timeTableQuery)
       .populate({
         path: "studentId",
@@ -7094,6 +7479,9 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
 
     // Xử lý dữ liệu lịch học
     timeTableData.forEach((item) => {
+      if (!item || !item.studentId || !item.studentId._id) {
+        return; // Bỏ qua bản ghi lịch học không có student hợp lệ
+      }
       const key = String(item.studentId._id);
       if (!studentsMap.has(key)) {
         studentsMap.set(key, {
@@ -7109,7 +7497,7 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
       }
 
       // Thêm tất cả schedules từ item.schedules - chuyển đổi thành plain object
-      if (item.schedules && item.schedules.length > 0) {
+      if (Array.isArray(item.schedules) && item.schedules.length > 0) {
         item.schedules.forEach((schedule) => {
           // Chuyển đổi Mongoose subdocument thành plain object
           const plainSchedule = schedule.toObject
@@ -7131,7 +7519,7 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
 
     // Gọi function getAllCutRice để lấy dữ liệu cắt cơm
     try {
-      // Tạo mock request object
+      // Tạo mock request object với xử lý nhiều đơn vị
       const mockReq = {
         query: unit ? { unit } : {},
       };
@@ -7151,9 +7539,12 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
       // Gọi function getAllCutRice
       await getAllCutRice(mockReq, mockRes);
 
+      console.log("Cut rice data found:", cutRices.length);
+
       // Gán dữ liệu cắt cơm cho sinh viên trong studentsMap
       let assignedCount = 0;
       cutRices.forEach((cutRice) => {
+        if (!cutRice || !cutRice.studentId) return;
         const sid = String(cutRice.studentId);
 
         if (studentsMap.has(sid)) {
@@ -7162,10 +7553,33 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
         } else {
         }
       });
-    } catch (error) {}
+
+      console.log("Cut rice assigned to students:", assignedCount);
+    } catch (error) {
+      console.log("Error getting cut rice data:", error);
+    }
+
+    // Debug: Log thông tin để kiểm tra
+    console.log("=== DEBUG: getExcelTimeTableWithCutRice ===");
+    console.log("TimeTable data found:", timeTableData.length);
+    console.log("Students in map:", studentsMap.size);
+    console.log(
+      "Students with schedules:",
+      Array.from(studentsMap.values()).filter((s) => s.schedules.length > 0)
+        .length
+    );
 
     // Lọc và sắp xếp sinh viên - chỉ hiển thị sinh viên có lịch học
-    const students = Array.from(studentsMap.values())
+    const allStudents = Array.from(studentsMap.values());
+    console.log(
+      "All students in map:",
+      allStudents.map((s) => ({
+        name: s.fullName,
+        schedules: s.schedules.length,
+      }))
+    );
+
+    const students = allStudents
       .filter((student) => student.schedules.length > 0) // Chỉ lấy sinh viên có lịch học
       .sort((a, b) => {
         const unitOrder = {
@@ -7182,10 +7596,15 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
         return a.fullName.localeCompare(b.fullName, "vi");
       });
 
+    console.log("Final students to process:", students.length);
+
     let rowIndex = 5; // Dữ liệu bắt đầu từ row 5
     let studentIndex = 1;
 
     students.forEach((student) => {
+      console.log(
+        `Processing student: ${student.fullName}, schedules: ${student.schedules.length}`
+      );
       // Sắp xếp lịch học theo thứ
       const dayOrder = {
         "Thứ 2": 1,
@@ -7320,6 +7739,9 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
             isFirstInGroup ? cutRiceForDay.dinner : "",
           ];
 
+          console.log(
+            `Adding row for ${student.fullName}: ${schedule.subject} - ${schedule.time}`
+          );
           const row = worksheet.addRow(rowData);
           const rowHeight = isFirstInGroup ? 35 : 20;
           worksheet.getRow(rowIndex).height = rowHeight;
@@ -7381,13 +7803,26 @@ const getExcelTimeTableWithCutRice = async (req, res) => {
 
     // Log tổng quan về dữ liệu cắt cơm
 
+    // Tạo tên file động dựa trên đơn vị
+    let fileName = "thoikhoabieu";
+    if (unit) {
+      if (unit.includes(",")) {
+        const units = unit
+          .split(",")
+          .map((u) => u.trim().replace(/[^a-zA-Z0-9]/g, ""));
+        fileName = `thoikhoabieu_${units.join("_")}`;
+      } else {
+        fileName = `thoikhoabieu_${unit.replace(/[^a-zA-Z0-9]/g, "")}`;
+      }
+    }
+
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=thoikhoabieu.xlsx"
+      `attachment; filename=${fileName}.xlsx`
     );
 
     await workbook.xlsx.write(res);
@@ -7475,6 +7910,8 @@ module.exports = {
   getYearlyStatistics,
   getPartyRatings,
   getTrainingRatings,
+  getAllStudentsForPartyRating,
+  getAllStudentsForTrainingRating,
   getWordTuitionFee,
   updateTuitionFeeStatus,
   getGraduatedStudents,

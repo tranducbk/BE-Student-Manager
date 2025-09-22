@@ -189,7 +189,7 @@ const getYearlyStatistics = async (schoolYear) => {
       return acc;
     }, {});
 
-    // Phân bố xếp loại đảng viên
+    // Phân bố xếp loại Đảng viên
     const partyRatingDistribution = yearlyResults.reduce((acc, yearly) => {
       const rating = yearly.partyRating?.rating || "Chưa có";
       acc[rating] = (acc[rating] || 0) + 1;

@@ -32,7 +32,7 @@ const {
   getForeignRelations,
   updateForeignRelation,
   deleteForeignRelation,
-  // CRUD cho xếp loại đảng viên
+  // CRUD cho xếp loại Đảng viên
   addPartyRating,
   getPartyRatings,
   updatePartyRating,
@@ -200,7 +200,7 @@ router.delete(
   deleteForeignRelation
 );
 
-// ===== ROUTES CHO XẾP LOẠI ĐẢNG VIÊN =====
+// ===== ROUTES CHO XẾP LOẠI Đảng viên =====
 router.post("/:studentId/party-ratings", verifyToken, addPartyRating);
 router.get("/:studentId/party-ratings", verifyToken, getPartyRatings);
 router.put(

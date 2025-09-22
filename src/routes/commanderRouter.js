@@ -76,6 +76,8 @@ const {
   getYearlyStatistics,
   getPartyRatings,
   getTrainingRatings,
+  getAllStudentsForPartyRating,
+  getAllStudentsForTrainingRating,
   getWordTuitionFee,
   updateTuitionFeeStatus,
   getGraduatedStudents,
@@ -303,6 +305,18 @@ router.get("/allStudentsGrades", verifyToken, isAdmin, getAllStudentsGrades);
 router.get("/yearlyStatistics", verifyToken, isAdmin, getYearlyStatistics);
 router.get("/partyRatings", verifyToken, isAdmin, getPartyRatings);
 router.get("/trainingRatings", verifyToken, isAdmin, getTrainingRatings);
+router.get(
+  "/allStudentsForPartyRating",
+  verifyToken,
+  isAdmin,
+  getAllStudentsForPartyRating
+);
+router.get(
+  "/allStudentsForTrainingRating",
+  verifyToken,
+  isAdmin,
+  getAllStudentsForTrainingRating
+);
 router.get(
   "/learningResultBySemester",
   verifyToken,

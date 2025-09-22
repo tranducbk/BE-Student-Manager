@@ -86,7 +86,7 @@ const yearlyResultSchema = new mongoose.Schema({
   cumulativeGrade4: { type: Number, default: 0 }, // Điểm tích lũy hệ 4 cuối năm
   cumulativeGrade10: { type: Number, default: 0 }, // Điểm tích lũy hệ 10 cuối năm
 
-  // Xếp loại đảng viên theo năm (lấy từ học kỳ cuối cùng)
+  // Xếp loại Đảng viên theo năm (lấy từ học kỳ cuối cùng)
   partyRating: {
     decisionNumber: { type: String }, // Số quyết định
     rating: {
