@@ -113,6 +113,9 @@ const yearlyResultSchema = new mongoose.Schema({
     enum: ["Tốt", "Khá", "Trung bình", "Yếu", "Kém"],
   },
 
+  // Năm học hiện tại dựa trên số tín chỉ tích lũy
+  studentLevel: { type: Number, default: 1 },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -258,6 +261,9 @@ const studentSchema = mongoose.model(
     learningInformation: [learningInformationSchema],
     semesterResults: [semesterResultSchema],
     yearlyResults: [yearlyResultSchema], // Kết quả học tập theo năm
+    // CPA hiện tại của học viên (từ học kỳ gần nhất, để hiển thị nhanh trên dashboard)
+    currentCpa4: { type: Number, default: 0 },
+    currentCpa10: { type: Number, default: 0 },
     cutRice: [cutRiceSchema],
     // Thông tin người thân
     familyMembers: [familyMemberSchema],

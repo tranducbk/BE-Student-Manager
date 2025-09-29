@@ -223,6 +223,20 @@ const addSemesterGrades = async (req, res) => {
 
     // Cập nhật điểm tích lũy cho tất cả học kỳ
     gradeHelper.updateCumulativeGrades(user.student.semesterResults);
+    // Cập nhật CPA hiện tại của student từ học kỳ mới nhất
+    const latest = [...user.student.semesterResults]
+      .sort((a, b) => {
+        const yc = String(a.schoolYear).localeCompare(String(b.schoolYear));
+        if (yc !== 0) return yc;
+        const sa = parseInt(String(a.semester).replace("HK", ""));
+        const sb = parseInt(String(b.semester).replace("HK", ""));
+        return (isNaN(sa) ? 0 : sa) - (isNaN(sb) ? 0 : sb);
+      })
+      .pop();
+    if (latest) {
+      user.student.currentCpa4 = latest.cumulativeGrade4 || 0;
+      user.student.currentCpa10 = latest.cumulativeGrade10 || 0;
+    }
 
     // Tính toán lại CPA cho tất cả các năm học
     try {
@@ -316,6 +330,25 @@ const updateSemesterGrades = async (req, res) => {
 
     // Cập nhật điểm tích lũy cho tất cả học kỳ
     gradeHelper.updateCumulativeGrades(user.student.semesterResults);
+    // Cập nhật CPA hiện tại của student
+    {
+      const latest = [...user.student.semesterResults]
+        .sort((a, b) => {
+          const yc = String(a.schoolYear).localeCompare(String(b.schoolYear));
+          if (yc !== 0) return yc;
+          const sa = parseInt(String(a.semester).replace("HK", ""));
+          const sb = parseInt(String(b.semester).replace("HK", ""));
+          return (isNaN(sa) ? 0 : sa) - (isNaN(sb) ? 0 : sb);
+        })
+        .pop();
+      if (latest) {
+        user.student.currentCpa4 = latest.cumulativeGrade4 || 0;
+        user.student.currentCpa10 = latest.cumulativeGrade10 || 0;
+      } else {
+        user.student.currentCpa4 = 0;
+        user.student.currentCpa10 = 0;
+      }
+    }
 
     // Tính toán lại CPA cho tất cả các năm học
     try {
@@ -382,6 +415,25 @@ const deleteSemesterGrades = async (req, res) => {
     if (user.student.semesterResults.length > 0) {
       gradeHelper.updateCumulativeGrades(user.student.semesterResults);
     }
+    // Cập nhật CPA hiện tại sau khi xóa
+    {
+      const latest = [...user.student.semesterResults]
+        .sort((a, b) => {
+          const yc = String(a.schoolYear).localeCompare(String(b.schoolYear));
+          if (yc !== 0) return yc;
+          const sa = parseInt(String(a.semester).replace("HK", ""));
+          const sb = parseInt(String(b.semester).replace("HK", ""));
+          return (isNaN(sa) ? 0 : sa) - (isNaN(sb) ? 0 : sb);
+        })
+        .pop();
+      if (latest) {
+        user.student.currentCpa4 = latest.cumulativeGrade4 || 0;
+        user.student.currentCpa10 = latest.cumulativeGrade10 || 0;
+      } else {
+        user.student.currentCpa4 = 0;
+        user.student.currentCpa10 = 0;
+      }
+    }
 
     // Cập nhật kết quả năm học sau khi xóa
     await updateYearlyResultsAfterDelete(user.student, schoolYear);
@@ -435,6 +487,25 @@ const deleteSemesterGradesById = async (req, res) => {
     // Cập nhật điểm tích lũy cho tất cả học kỳ còn lại
     if (user.student.semesterResults.length > 0) {
       gradeHelper.updateCumulativeGrades(user.student.semesterResults);
+    }
+    // Cập nhật CPA hiện tại sau khi xóa theo ID
+    {
+      const latest = [...user.student.semesterResults]
+        .sort((a, b) => {
+          const yc = String(a.schoolYear).localeCompare(String(b.schoolYear));
+          if (yc !== 0) return yc;
+          const sa = parseInt(String(a.semester).replace("HK", ""));
+          const sb = parseInt(String(b.semester).replace("HK", ""));
+          return (isNaN(sa) ? 0 : sa) - (isNaN(sb) ? 0 : sb);
+        })
+        .pop();
+      if (latest) {
+        user.student.currentCpa4 = latest.cumulativeGrade4 || 0;
+        user.student.currentCpa10 = latest.cumulativeGrade10 || 0;
+      } else {
+        user.student.currentCpa4 = 0;
+        user.student.currentCpa10 = 0;
+      }
     }
 
     // Tính toán lại CPA cho tất cả các năm học sau khi xóa

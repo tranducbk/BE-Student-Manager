@@ -4091,6 +4091,11 @@ const getAllStudentsGrades = async (req, res) => {
           );
         }
 
+        // Cập nhật điểm tích lũy cho tất cả học kỳ trước khi xử lý
+        if (filteredResults.length > 0) {
+          gradeHelper.updateCumulativeGrades(filteredResults);
+        }
+
         // Thêm thông tin student vào mỗi kết quả
         filteredResults.forEach((result) => {
           const subjects = Array.isArray(result.subjects)
@@ -4134,6 +4139,9 @@ const getAllStudentsGrades = async (req, res) => {
             yearlyResults: student.yearlyResults || [],
             GPA: result.averageGrade4?.toFixed(2) || "0.00",
             CPA: result.cumulativeGrade4?.toFixed(2) || "0.00",
+            // Thêm GPA của học kỳ cụ thể (khác với CPA tích lũy)
+            semesterGPA: result.averageGrade4?.toFixed(2) || "0.00",
+            semesterGPA10: result.averageGrade10?.toFixed(2) || "0.00",
             cumulativeCredit: result.cumulativeCredits || 0,
             totalDebt: result.totalDebt || 0,
             studentLevel: result.studentLevel || 1,
@@ -5460,7 +5468,8 @@ const getYearlyStatistics = async (req, res) => {
             lastResult.cumulativeGrade10?.toFixed(2) || "0.00";
           const cumulativeCredits = lastResult.cumulativeCredits || 0;
           const totalDebt = lastResult.totalDebt || 0;
-          const studentLevel = lastResult.studentLevel || 1;
+          const studentLevel =
+            gradeHelper.calculateStudentLevel(cumulativeCredits);
 
           // Tìm yearlyResult tương ứng trong student.yearlyResults
           const existingYearlyResult = student.yearlyResults?.find(
@@ -5857,7 +5866,8 @@ const getPartyRatings = async (req, res) => {
           const lastResult = yearResults[yearResults.length - 1];
           const cumulativeCredits = lastResult.cumulativeCredits || 0;
           const totalDebt = lastResult.totalDebt || 0;
-          const studentLevel = lastResult.studentLevel || 1;
+          const studentLevel =
+            gradeHelper.calculateStudentLevel(cumulativeCredits);
 
           // Tìm yearlyResult tương ứng trong student.yearlyResults
           const existingYearlyResult = student.yearlyResults?.find(
@@ -6154,7 +6164,8 @@ const getTrainingRatings = async (req, res) => {
           const lastResult = yearResults[yearResults.length - 1];
           const cumulativeCredits = lastResult.cumulativeCredits || 0;
           const totalDebt = lastResult.totalDebt || 0;
-          const studentLevel = lastResult.studentLevel || 1;
+          const studentLevel =
+            gradeHelper.calculateStudentLevel(cumulativeCredits);
 
           // Tìm yearlyResult tương ứng trong student.yearlyResults
           const existingYearlyResult = student.yearlyResults?.find(

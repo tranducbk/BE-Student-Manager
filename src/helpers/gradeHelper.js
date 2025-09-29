@@ -140,7 +140,9 @@ const calculateAverageGrade4 = (subjects) => {
     totalCredits += subject.credits;
   });
 
-  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+  return totalCredits > 0
+    ? Math.round((totalGradePoints / totalCredits) * 100) / 100
+    : 0.0;
 };
 
 // Tính điểm trung bình hệ 10 cho một danh sách môn học
@@ -155,7 +157,9 @@ const calculateAverageGrade10 = (subjects) => {
     totalCredits += subject.credits;
   });
 
-  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+  return totalCredits > 0
+    ? Math.round((totalGradePoints / totalCredits) * 100) / 100
+    : 0.0;
 };
 
 // Tổng tín chỉ nợ trong danh sách môn
@@ -202,7 +206,9 @@ const calculateCumulativeGrade4 = (allSemesterResults) => {
     });
   });
 
-  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+  return totalCredits > 0
+    ? Math.round((totalGradePoints / totalCredits) * 100) / 100
+    : 0.0;
 };
 
 // Tính điểm tích lũy hệ 10
@@ -219,7 +225,9 @@ const calculateCumulativeGrade10 = (allSemesterResults) => {
     });
   });
 
-  return totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+  return totalCredits > 0
+    ? Math.round((totalGradePoints / totalCredits) * 100) / 100
+    : 0.0;
 };
 
 // Tính tổng tín chỉ tích lũy
@@ -274,15 +282,54 @@ const updateSemesterResult = (semesterResult) => {
   return semesterResult;
 };
 
-// Cập nhật điểm tích lũy cho tất cả học kỳ
+// Cập nhật điểm tích lũy cho tất cả học kỳ (lũy tiến theo thời gian)
 const updateCumulativeGrades = (allSemesterResults) => {
-  const cumulativeCredits = calculateCumulativeCredits(allSemesterResults);
-  const cumulativeGrade4 = calculateCumulativeGrade4(allSemesterResults);
-  const cumulativeGrade10 = calculateCumulativeGrade10(allSemesterResults);
-  const cumulativeGrade10FromCpa4 = allSemesterResults.forEach((semester) => {
-    semester.cumulativeCredits = cumulativeCredits;
-    semester.cumulativeGrade4 = cumulativeGrade4;
-    semester.cumulativeGrade10 = cumulativeGrade10;
+  if (!Array.isArray(allSemesterResults) || allSemesterResults.length === 0) {
+    return allSemesterResults || [];
+  }
+
+  const sorted = [...allSemesterResults].sort((a, b) => {
+    const yearComparison = String(a.schoolYear).localeCompare(
+      String(b.schoolYear)
+    );
+    if (yearComparison !== 0) return yearComparison;
+    const sa = parseInt(String(a.semester).replace("HK", ""));
+    const sb = parseInt(String(b.semester).replace("HK", ""));
+    return (isNaN(sa) ? 0 : sa) - (isNaN(sb) ? 0 : sb);
+  });
+
+  let accCredits = 0;
+  let accGradePoints4 = 0;
+  let accGradePoints10 = 0;
+
+  sorted.forEach((semester) => {
+    const subjects = semester.subjects || [];
+    const semesterCredits = calculateTotalCredits(subjects);
+    const avg4 = calculateAverageGrade4(subjects);
+    const avg10 = calculateAverageGrade10(subjects);
+
+    // Đồng bộ lại các trường học kỳ (làm tròn đến 2 chữ số thập phân)
+    semester.totalCredits = semesterCredits;
+    semester.averageGrade4 = Math.round(avg4 * 100) / 100;
+    semester.averageGrade10 = Math.round(avg10 * 100) / 100;
+    semester.debtCredits = calculateDebtCredits(subjects);
+    semester.failedSubjects = calculateFailedSubjects(subjects);
+
+    // Tích lũy
+    accCredits += semesterCredits;
+    accGradePoints4 += avg4 * semesterCredits;
+    accGradePoints10 += avg10 * semesterCredits;
+
+    semester.cumulativeCredits = accCredits;
+    semester.cumulativeGrade4 =
+      accCredits > 0
+        ? Math.round((accGradePoints4 / accCredits) * 100) / 100
+        : 0.0;
+    semester.cumulativeGrade10 =
+      accCredits > 0
+        ? Math.round((accGradePoints10 / accCredits) * 100) / 100
+        : 0.0;
+    semester.studentLevel = calculateStudentLevel(accCredits);
     semester.updatedAt = new Date();
   });
 
@@ -341,6 +388,17 @@ const calculateAverageFromGrade4 = (grades) => {
   return sum / grades.length;
 };
 
+// Tính năm học dựa trên số tín chỉ tích lũy
+const calculateStudentLevel = (cumulativeCredits) => {
+  const credits = parseInt(cumulativeCredits) || 0;
+
+  if (credits < 32) return 1; // Năm thứ nhất
+  if (credits < 64) return 2; // Năm thứ hai
+  if (credits < 96) return 3; // Năm thứ ba
+  if (credits < 128) return 4; // Năm thứ tư
+  return 5; // Năm thứ năm
+};
+
 module.exports = {
   formatSemester,
   LETTER_TO_GRADE_4,
@@ -370,4 +428,5 @@ module.exports = {
   getGradeDescription,
   calculateAverageFromGrade10,
   calculateAverageFromGrade4,
+  calculateStudentLevel,
 };

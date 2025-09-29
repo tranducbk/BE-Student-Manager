@@ -310,7 +310,7 @@ const createEducationLevel = async (req, res) => {
 const createClass = async (req, res) => {
   try {
     const { educationLevelId } = req.params;
-    const { className } = req.body;
+    const { className, studentCount } = req.body;
 
     if (!className) {
       return res.status(400).json({ message: "Tên lớp là bắt buộc" });
@@ -319,10 +319,19 @@ const createClass = async (req, res) => {
     const newClass = new Class({
       className,
       educationLevelId,
-      studentCount: 0, // Khởi tạo với 0 sinh viên
+      studentCount: typeof studentCount === "number" ? studentCount : 0,
     });
 
     await newClass.save();
+
+    const educationLevel = await EducationLevel.findById(educationLevelId);
+    if (educationLevel) {
+      await Organization.findByIdAndUpdate(
+        educationLevel.organizationId,
+        { $inc: { totalStudents: newClass.studentCount } },
+        { new: true }
+      );
+    }
 
     return res.status(201).json(newClass);
   } catch (error) {
@@ -374,15 +383,35 @@ const updateEducationLevel = async (req, res) => {
 const updateClass = async (req, res) => {
   try {
     const { classId } = req.params;
-    const classItem = await Class.findByIdAndUpdate(classId, req.body, {
-      new: true,
-    });
-
-    if (!classItem) {
+    const existingClass = await Class.findById(classId);
+    if (!existingClass) {
       return res.status(404).json({ message: "Không tìm thấy class" });
     }
 
-    return res.status(200).json(classItem);
+    const prevCount = existingClass.studentCount || 0;
+    const updateData = { ...req.body };
+
+    const updatedClass = await Class.findByIdAndUpdate(classId, updateData, {
+      new: true,
+    });
+
+    if (typeof req.body.studentCount === "number") {
+      const delta = (updatedClass.studentCount || 0) - prevCount;
+      if (delta !== 0) {
+        const educationLevel = await EducationLevel.findById(
+          updatedClass.educationLevelId
+        );
+        if (educationLevel) {
+          await Organization.findByIdAndUpdate(
+            educationLevel.organizationId,
+            { $inc: { totalStudents: delta } },
+            { new: true }
+          );
+        }
+      }
+    }
+
+    return res.status(200).json(updatedClass);
   } catch (error) {
     return res.status(500).json({ message: "Lỗi server" });
   }
@@ -448,6 +477,17 @@ const deleteClass = async (req, res) => {
     }
 
     await Class.findByIdAndDelete(classId);
+
+    const educationLevel = await EducationLevel.findById(
+      classItem.educationLevelId
+    );
+    if (educationLevel && classItem.studentCount) {
+      await Organization.findByIdAndUpdate(
+        educationLevel.organizationId,
+        { $inc: { totalStudents: -classItem.studentCount } },
+        { new: true }
+      );
+    }
 
     return res.status(200).json({ message: "Xóa lớp thành công" });
   } catch (error) {
